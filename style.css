@@ -1,8 +1,6 @@
 /* ═══════════════════════════════════════════════════════
-   style.css — Intro Hoa + Canvas Trail
-   Đã xoá: .trail__item, .trail__img (không dùng nữa)
-   Đã thêm: GPU acceleration cho canvas + flowers
-═══════════════════════════════════════════════════════ */
+   style.css  —  Intro Hoa + Image Trail
+   ═══════════════════════════════════════════════════════ */
 
 *, *::after, *::before { box-sizing: border-box; padding: 0; margin: 0; }
 
@@ -18,9 +16,11 @@
 
 html, body { width: 100%; height: 100%; overflow: hidden; }
 
-/* ═══════════════════════════════════════════
-   CHUYỂN CẢNH — slide ngang
-═══════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════
+   CHUYỂN CẢNH: slide ngang
+   ══════════════════════════════════════════════════════ */
+
+/* Cả 2 trang chiếm toàn màn hình, xếp chồng */
 #page1, #page2 {
   position: fixed;
   inset: 0;
@@ -28,22 +28,19 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
   height: 100%;
   transition: transform 0.9s cubic-bezier(0.77, 0, 0.18, 1),
               opacity   0.9s ease;
-  /* GPU layer cho transition */
-  will-change: transform, opacity;
-  transform: translateZ(0);
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
 }
 
-#page1 { transform: translateX(0);    opacity: 1; z-index: 10; }
-#page2 { transform: translateX(100%); opacity: 0; z-index: 5;  }
+/* Trạng thái mặc định: page1 hiện, page2 ẩn bên phải */
+#page1 { transform: translateX(0);     opacity: 1; z-index: 10; }
+#page2 { transform: translateX(100%);  opacity: 0; z-index: 5;  }
 
+/* Khi body.go-page2: page1 trượt ra trái, page2 vào */
 body.go-page2 #page1 { transform: translateX(-100%); opacity: 0; }
 body.go-page2 #page2 { transform: translateX(0);     opacity: 1; z-index: 10; }
 
-/* ═══════════════════════════════════════════
+/* ══════════════════════════════════════════════════════
    TRANG 1 — HOA CSS
-═══════════════════════════════════════════ */
+   ══════════════════════════════════════════════════════ */
 #page1 {
   display: flex;
   align-items: flex-end;
@@ -84,39 +81,27 @@ body.go-page2 #page2 { transform: translateX(0);     opacity: 1; z-index: 10; }
   font-size: 17px;
   color: #fff;
   background: transparent;
-  border: 2px solid rgba(255,255,255,0.5);
+  border: 2px solid rgba(255, 255, 255, 0.5);
   border-radius: 50px;
   cursor: pointer;
   letter-spacing: 2px;
   backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
   opacity: 0;
   pointer-events: none;
+  /* Xuất hiện sau 5s khi hoa đã nở xong */
   animation: btn-fadein 0.8s 5s forwards;
   transition: background 0.3s, border-color 0.3s, transform 0.2s;
 }
 @keyframes btn-fadein { to { opacity: 1; pointer-events: auto; } }
 #btn-next:hover {
-  background: rgba(255,255,255,0.15);
+  background: rgba(255, 255, 255, 0.15);
   border-color: #fff;
   transform: translateX(-50%) scale(1.05);
 }
 
-/* ── Flowers — GPU promoted ── */
-.flowers {
-  position: relative;
-  transform: scale(0.9) translateZ(0);  /* GPU layer */
-  will-change: transform;
-}
-
-.flower {
-  position: absolute;
-  bottom: 10vmin;
-  transform-origin: bottom center;
-  z-index: 10;
-  --fl-speed: 0.8s;
-  will-change: transform;
-}
+/* ── Flowers (giữ nguyên từ style.css gốc) ── */
+.flowers { position: relative; transform: scale(0.9); }
+.flower { position: absolute; bottom: 10vmin; transform-origin: bottom center; z-index: 10; --fl-speed: 0.8s; }
 .flower--1 { animation: moving-flower-1 4s linear infinite; }
 .flower--1 .flower__line { height: 70vmin; animation-delay: 0.3s; }
 .flower--1 .flower__line__leaf--1 { animation: blooming-leaf-right var(--fl-speed) 1.6s backwards; }
@@ -194,7 +179,7 @@ body.go-page2 #page2 { transform: translateX(0);     opacity: 1; z-index: 10; }
 .flower__g-front__line { width: .3vmin; height: 20vmin; background-image: linear-gradient(to top,transparent,#079097,transparent 100%); position: relative; }
 .flower__g-front__leaf-wrapper { position: absolute; top: 0; left: 0; transform-origin: bottom left; transform: rotate(10deg); }
 .flower__g-front__leaf-wrapper:nth-child(even) { left: 0; transform: rotateY(-180deg) rotate(5deg); animation: flower__g-front__leaf-left-ans 1s ease-in backwards; }
-.flower__g-front__leaf-wrapper:nth-child(odd)  { animation: flower__g-front__leaf-ans 1s ease-in backwards; }
+.flower__g-front__leaf-wrapper:nth-child(odd) { animation: flower__g-front__leaf-ans 1s ease-in backwards; }
 .flower__g-front__leaf-wrapper--1 { top:-8vmin; transform:scale(.7); animation:flower__g-front__leaf-ans 1s 5.5s ease-in backwards !important; }
 .flower__g-front__leaf-wrapper--2 { top:-8vmin; transform:rotateY(-180deg) scale(.7) !important; animation:flower__g-front__leaf-left-ans-2 1s 5.2s ease-in backwards !important; }
 .flower__g-front__leaf-wrapper--3 { top:-3vmin; animation:flower__g-front__leaf-ans 1s 4.9s ease-in backwards; }
@@ -277,95 +262,121 @@ body.go-page2 #page2 { transform: translateX(0);     opacity: 1; z-index: 10; }
 @keyframes leaf-ans-3{0%,100%{transform:rotate(-10deg) rotateY(-180deg)}50%{transform:rotate(-20deg) rotateY(-180deg)}}
 @keyframes grow-ans{0%{transform:scale(0);opacity:0}}
 
-/* ═══════════════════════════════════════════
-   TRANG 2 — Canvas Trail
-═══════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════
+   TRANG 2 — IMAGE TRAIL (giữ nguyên style.css gốc)
+   ══════════════════════════════════════════════════════ */
 #page2 {
   background-color: #0c0c0c;
+  color: #d05400;
   --color-text:              #d05400;
+  --color-bg:                #0c0c0c;
+  --color-link:              #6b5537;
   --color-content-title-sub: #6b5537;
   --cursor-stroke:           #6b5537;
   --cursor-fill:             none;
   --cursor-stroke-width:     1px;
 }
 
-#page2 main {
-  height: 100%; width: 100%;
-  overflow: hidden; position: relative;
+/* Loader cho trang 2 */
+.js .loading #page2::before,
+.js .loading #page2::after {
+  content: '';
+  position: absolute;
+  z-index: 1000;
 }
+.js .loading #page2::before {
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: #0c0c0c;
+}
+.js .loading #page2::after {
+  top: 50%; left: 50%;
+  width: 60px; height: 60px;
+  margin: -30px 0 0 -30px;
+  border-radius: 50%;
+  opacity: 0.4;
+  background: #6b5537;
+  animation: loaderAnim 0.7s linear infinite alternate forwards;
+}
+@keyframes loaderAnim { to { opacity: 1; transform: scale3d(0.5,0.5,1); } }
 
-/* Canvas được inject bởi JS — GPU hint ở đây là backup */
-#page2 canvas {
-  will-change: transform;
+#page2 main { height: 100%; width: 100%; overflow: hidden; position: relative; }
+
+.no-select { -webkit-user-select:none; -moz-user-select:none; -ms-user-select:none; user-select:none; }
+
+.message { position:relative; z-index:100; text-align:center; background:var(--color-text); color:var(--color-bg); padding:1rem; font-size:.85rem; }
+
+.frame { padding:3rem 5vw; text-align:center; position:relative; z-index:1000; }
+
+.content { display:flex; flex-direction:column; width:100vw; height:calc(100vh - 13rem); position:relative; align-items:center; justify-content:center; max-height:300px; }
+
+#trailContainer { position:fixed; inset:0; pointer-events:none; z-index:20; overflow:visible; }
+
+.trail__item {
+  position: absolute;
+  top: 0; left: 0;
+  width: 320px;
+  height: 250px;
+  pointer-events: none;
+  /* GPU composite layer — quan trọng nhất để chống lag */
+  will-change: transform, opacity;
   transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  opacity: 0;
 }
 
-.no-select { -webkit-user-select:none; user-select:none; }
-.message   { display: none !important; }
-.frame     { display: none; }
+.trail__img { width:100%; height:100%; background-size:cover; background-position:50% 50%; border-radius:7px; box-shadow:0 8px 28px rgba(0,0,0,.6); }
 
-.content {
-  display: flex;
-  flex-direction: column;
-  width: 100vw; height: 100vh;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  z-index: 30;
+.content__title { font-family:myFont,serif; font-weight:400; font-size:10vw; margin:10px 0; line-height:1; position:relative; z-index:30; }
+.content__title-sub { color:var(--color-content-title-sub); font-size:4vw; display:block; margin-left:3vw; line-height:.5; }
+
+.cursor { display:none; }
+
+@media screen and (min-width:53em) {
+  .message { display:none; }
+  .frame { position:fixed; text-align:left; z-index:100; top:0; left:0; width:100%; height:100%; padding:3rem; pointer-events:none; display:grid; align-content:space-between; grid-template-columns:75% 25%; grid-template-rows:auto auto auto; grid-template-areas:'title links' '... ...' '... demos'; }
+  .frame a { pointer-events:auto; }
+  .content { height:100%; justify-content:center; max-height:none; }
 }
 
-.content__title {
-  font-family: myFont, serif;
-  font-weight: 400;
-  font-size: 10vw;
-  margin: 10px 0;
-  line-height: 1;
-  color: #d05400;
-}
-.content__title-sub {
-  color: var(--color-content-title-sub);
-  font-size: 4vw;
-  display: block;
-  margin-left: 3vw;
-  line-height: .5;
+@media (any-pointer:fine) {
+  .cursor { position:fixed; top:0; left:0; display:block; pointer-events:none; z-index:9999; }
+  .cursor__inner { fill:var(--cursor-fill); stroke:var(--cursor-stroke); stroke-width:var(--cursor-stroke-width); }
+  body.go-page2 { cursor:none; }
 }
 
-/* Cursor — desktop only */
-.cursor { display: none; }
-@media (any-pointer: fine) {
-  .cursor {
-    position: fixed; top: 0; left: 0;
-    display: block; pointer-events: none; z-index: 9999;
-    will-change: transform;
-  }
-  .cursor__inner {
-    fill: var(--cursor-fill);
-    stroke: var(--cursor-stroke);
-    stroke-width: var(--cursor-stroke-width);
-  }
-  body.go-page2 { cursor: none; }
-}
-@media (any-pointer: coarse) {
-  .cursor { display: none !important; }
-  body.go-page2 { cursor: auto; }
+/* ── GPU tăng tốc cho tất cả animation ── */
+.trail__img {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
-/* Chặn scroll khi vuốt trang 2 */
-body.go-page2 #page2 { touch-action: none; overflow: hidden; }
-
-/* ═══════════════════════════════════════════
-   MOBILE
-═══════════════════════════════════════════ */
+/* ── Mobile: ảnh nhỏ hơn, ít blur hơn ── */
 @media screen and (max-width: 768px) {
+  .trail__item {
+    width:  140px;
+    height: 110px;
+  }
+  /* Tắt box-shadow nặng trên mobile */
+  .trail__img {
+    box-shadow: none;
+  }
   .content__title     { font-size: 18vw; }
   .content__title-sub { font-size: 6vw; margin-left: 4vw; }
+  #btn-next           { padding: 16px 44px; font-size: 16px; bottom: 60px; }
   .happy-woman-day    { font-size: clamp(14px, 5vw, 28px); top: 40px; }
-  #btn-next           { padding: 16px 44px; font-size: 16px; }
 }
 
-/* iPhone notch / home bar safe area */
+/* ── Ẩn cursor trên touch ── */
+@media (any-pointer: coarse) {
+  body.go-page2 { cursor: auto; }
+  .cursor { display: none !important; }
+}
+.message { display: none !important; }
+
+body.go-page2 #page2 { touch-action: none; overflow: hidden; }
+
 @supports (padding: max(0px)) {
-  #btn-next {
-    bottom: max(44px, calc(env(safe-area-inset-bottom) + 20px));
-  }
+  #btn-next { bottom: max(44px, calc(env(safe-area-inset-bottom) + 20px)); }
 }
