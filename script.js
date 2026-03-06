@@ -18,7 +18,6 @@ setTimeout(function () {
 
 var btnNext = document.getElementById('btn-next');
 function goPage2() {
-  prewarm(); // load ảnh ngay khi chuyển trang
   document.body.classList.add('go-page2');
   setTimeout(initTrail, 950);
 }
@@ -44,7 +43,7 @@ var CFG = {
   imgH        : IS_MOBILE ? 83  : 158,
   totalFrames : IS_MOBILE ? 36  : 65,
   fpsCap      : IS_MOBILE ? 30  : 60,
-  prewarmN    : IS_MOBILE ? 40  : 60,
+  prewarmN    : 150,  // load hết toàn bộ ngay từ đầu
   lookAheadN  : 5
 };
 
@@ -73,8 +72,35 @@ function isReady(idx) {
   return (_cache[idx] instanceof Image);
 }
 
-function prewarm() {
-  for (var i = 0; i < CFG.prewarmN; i++) loadImg(i);
+function prewarm(onAllLoaded) {
+  var total  = CFG.totalImages; // 150
+  var done   = 0;
+
+  // Cập nhật hint text tiến độ
+  var hintEl = document.getElementById('surprise-hint');
+  function updateHint() {
+    if (hintEl) hintEl.textContent = 'Đang tải ảnh... ' + done + '/' + total;
+  }
+  updateHint();
+
+  for (var i = 0; i < total; i++) {
+    if (_cache[i] !== null) { done++; updateHint(); continue; }
+    _cache[i] = 'loading';
+    (function(idx) {
+      var im = new Image();
+      im.onload = function () {
+        _cache[idx] = im;
+        done++; updateHint();
+        if (done >= total && onAllLoaded) onAllLoaded();
+      };
+      im.onerror = function () {
+        _cache[idx] = 'error';
+        done++; updateHint();
+        if (done >= total && onAllLoaded) onAllLoaded();
+      };
+      im.src = CFG.imgDir + 'img' + (idx + 1) + CFG.imgExt;
+    })(i);
+  }
 }
 
 function lookAhead(fromIdx) {
@@ -276,28 +302,18 @@ function initTrail() {
 
   document.body.classList.remove('loading');
 
-  // ── DEBUG: kiểm tra ảnh đầu tiên có load được không ──
-  var testImg = new Image();
-  testImg.onload = function () {
-    console.log('[Trail] ✅ Ảnh load OK:', testImg.src);
-    if (debugEl) debugEl.style.display = 'none';
-  };
-  testImg.onerror = function () {
-    console.error('[Trail] ❌ KHÔNG TÌM THẤY ẢNH:', testImg.src);
-    var debugEl = document.getElementById('trail-debug');
-    if (debugEl) {
-      debugEl.textContent = '❌ Không tìm thấy ảnh: ' + testImg.src + ' — Kiểm tra thư mục img/ trên GitHub';
-      debugEl.style.display = 'block';
-    }
-  };
-  var debugEl = document.getElementById('trail-debug');
-  testImg.src = CFG.imgDir + 'img1' + CFG.imgExt;
-  // ── END DEBUG ──
-
-  var page2 = document.getElementById('page2');
-  var pos   = { x: -9999, y: -9999 };
+  var page2      = document.getElementById('page2');
+  var btnSurprise = document.getElementById('btn-surprise');
+  var hintEl     = document.getElementById('surprise-hint');
+  var pos        = { x: -9999, y: -9999 };
   var trail;
   var eventsEnabled = false;
+
+  // Hiện hint "đang tải..." ngay khi vào trang 2
+  if (hintEl) {
+    hintEl.classList.add('visible');
+    hintEl.textContent = 'Đang tải ảnh... 0/150';
+  }
 
   // Throttle helper
   var pendingX = 0, pendingY = 0, pending = false;
@@ -305,40 +321,32 @@ function initTrail() {
     pendingX = x; pendingY = y;
     if (!pending) {
       pending = true;
-      requestAnimationFrame(function () {
-        pos.x = pendingX; pos.y = pendingY;
-        pending = false;
-      });
+      requestAnimationFrame(function () { pos.x = pendingX; pos.y = pendingY; pending = false; });
     }
   }
 
-  // Hàm bật events — chỉ gọi sau khi bấm nút bất ngờ
+  // Bật events — chỉ gọi sau khi bấm nút
   function enableEvents() {
     if (eventsEnabled) return;
     eventsEnabled = true;
-
     if (!IS_TOUCH) {
       window.addEventListener('mousemove', function (ev) {
         scheduleUpdate(ev.clientX, ev.clientY);
         if (trail) trail.wakeUp();
       }, { passive: true });
     }
-
     page2.addEventListener('touchmove', function (ev) {
       ev.preventDefault();
-      var t = ev.touches[0];
-      scheduleUpdate(t.clientX, t.clientY);
+      scheduleUpdate(ev.touches[0].clientX, ev.touches[0].clientY);
       if (trail) trail.wakeUp();
     }, { passive: false });
-
     page2.addEventListener('touchstart', function (ev) {
-      var t = ev.touches[0];
-      scheduleUpdate(t.clientX, t.clientY);
+      scheduleUpdate(ev.touches[0].clientX, ev.touches[0].clientY);
       if (trail) trail.wakeUp();
     }, { passive: true });
   }
 
-  // Canvas
+  // Canvas trail (tạo sẵn, chưa chạy)
   var canvas = document.createElement('canvas');
   canvas.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:20;will-change:transform;transform:translateZ(0);';
   page2.appendChild(canvas);
@@ -350,34 +358,38 @@ function initTrail() {
     if (cursorEl) new Cursor(cursorEl, pos);
   }
 
-  // Hiện nút bất ngờ
-  var btnSurprise = document.getElementById('btn-surprise');
-  var hintEl      = document.getElementById('surprise-hint');
-  if (btnSurprise) {
-    setTimeout(function () {
-      btnSurprise.classList.add('visible');
-      if (hintEl) hintEl.classList.add('visible');
-    }, 200);
-
-    function activateSurprise() {
-      btnSurprise.style.pointerEvents = 'none'; // chặn click ngay lập tức
+  // Bấm nút → bắt đầu trail
+  function activateSurprise() {
+    if (btnSurprise) {
+      btnSurprise.style.pointerEvents = 'none';
       btnSurprise.classList.remove('visible');
-      if (hintEl) hintEl.classList.remove('visible');
-      setTimeout(function () {
-        btnSurprise.style.display = 'none';
-        if (hintEl) hintEl.style.display = 'none';
-      }, 500); // khớp với transition 0.5s
-      enableEvents();
-      if (trail) trail.wakeUp();
+      setTimeout(function () { btnSurprise.style.display = 'none'; }, 500);
     }
-
-    btnSurprise.addEventListener('click', activateSurprise);
-    btnSurprise.addEventListener('touchend', function (e) {
-      e.preventDefault();
-      activateSurprise();
-    });
-  } else {
-    // Fallback: không có nút thì bật events luôn
+    if (hintEl) {
+      hintEl.classList.remove('visible');
+      setTimeout(function () { hintEl.style.display = 'none'; }, 500);
+    }
     enableEvents();
+    if (trail) trail.wakeUp();
   }
+
+  if (btnSurprise) {
+    btnSurprise.addEventListener('click', activateSurprise);
+    btnSurprise.addEventListener('touchend', function (e) { e.preventDefault(); activateSurprise(); });
+  } else {
+    enableEvents(); // fallback nếu không có nút
+  }
+
+  // Load 150 ảnh — CHỈ hiện nút khi load xong hoàn toàn
+  prewarm(function onAllLoaded() {
+    if (hintEl) {
+      hintEl.textContent = '✨ Sẵn sàng rồi!';
+      setTimeout(function () { hintEl.classList.remove('visible'); }, 800);
+    }
+    if (btnSurprise) {
+      setTimeout(function () {
+        btnSurprise.classList.add('visible');
+      }, 600); // hiện sau khi hint vừa mờ đi
+    }
+  });
 }
