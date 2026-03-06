@@ -37,7 +37,7 @@ var IS_MOBILE = IS_TOUCH && window.screen.width <= 900;
 var CFG = {
   totalImages : 150,
   imgDir      : './img/',
-  imgExt      : '.png',
+  imgExt      : '.webp',
   minDist     : IS_MOBILE ? 55  : 90,
   poolSize    : IS_MOBILE ? 6   : 10,
   imgW        : IS_MOBILE ? 110 : 210,
@@ -293,6 +293,24 @@ function initTrail() {
 
   document.body.classList.remove('loading');
 
+  // ── DEBUG: kiểm tra ảnh đầu tiên có load được không ──
+  var testImg = new Image();
+  testImg.onload = function () {
+    console.log('[Trail] ✅ Ảnh load OK:', testImg.src);
+    if (debugEl) debugEl.style.display = 'none';
+  };
+  testImg.onerror = function () {
+    console.error('[Trail] ❌ KHÔNG TÌM THẤY ẢNH:', testImg.src);
+    var debugEl = document.getElementById('trail-debug');
+    if (debugEl) {
+      debugEl.textContent = '❌ Không tìm thấy ảnh: ' + testImg.src + ' — Kiểm tra thư mục img/ trên GitHub';
+      debugEl.style.display = 'block';
+    }
+  };
+  var debugEl = document.getElementById('trail-debug');
+  testImg.src = CFG.imgDir + 'img1' + CFG.imgExt;
+  // ── END DEBUG ──
+
   var page2 = document.getElementById('page2');
   var pos   = { x: -9999, y: -9999 };
   var trail;
@@ -351,14 +369,21 @@ function initTrail() {
 
   // Hiện nút bất ngờ
   var btnSurprise = document.getElementById('btn-surprise');
+  var hintEl      = document.getElementById('surprise-hint');
   if (btnSurprise) {
     setTimeout(function () {
       btnSurprise.classList.add('visible');
+      if (hintEl) hintEl.classList.add('visible');
     }, 200);
 
     function activateSurprise() {
+      btnSurprise.style.pointerEvents = 'none'; // chặn click ngay lập tức
       btnSurprise.classList.remove('visible');
-      setTimeout(function () { btnSurprise.style.display = 'none'; }, 600);
+      if (hintEl) hintEl.classList.remove('visible');
+      setTimeout(function () {
+        btnSurprise.style.display = 'none';
+        if (hintEl) hintEl.style.display = 'none';
+      }, 500); // khớp với transition 0.5s
       enableEvents();
       if (trail) trail.wakeUp();
     }
