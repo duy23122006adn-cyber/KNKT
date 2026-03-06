@@ -37,7 +37,7 @@ var IS_MOBILE = IS_TOUCH && window.screen.width <= 900;
 var CFG = {
   totalImages : 150,
   imgDir      : './img/',
-  imgExt      : '.webp',
+  imgExt      : '.png',
   minDist     : IS_MOBILE ? 55  : 90,
   poolSize    : IS_MOBILE ? 6   : 10,
   imgW        : IS_MOBILE ? 110 : 210,
