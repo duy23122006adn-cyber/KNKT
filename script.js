@@ -1,6 +1,5 @@
 /**
  * script.js — Intro Hoa + Canvas Image Trail
- * Fix: Canvas tự đọc EXIF orientation qua CSS image-orientation trick
  */
 
 /* ══════════════════════════════════════════════════════
@@ -43,68 +42,41 @@ var FALLBACK_COLORS = [
 
 /* ══════════════════════════════════════════════════════
    IMAGE CACHE
-   Dùng trick: vẽ <img> qua canvas tạm để áp dụng EXIF orientation
-   (CSS image-orientation: from-image được browser tự xử lý khi draw vào canvas)
+   Dùng <img> với CSS image-orientation:from-image
+   Browser tự xử lý EXIF → drawImage sẽ đúng chiều
+   KHÔNG dùng crossOrigin / createImageBitmap / canvas tạm
    ══════════════════════════════════════════════════════ */
 var cache = {};
 
-/* Canvas tạm dùng để normalize EXIF orientation */
-var _tmpCanvas = document.createElement('canvas');
-var _tmpCtx    = _tmpCanvas.getContext('2d');
-
-function normalizeImage(im, callback) {
-  /* Vẽ ảnh qua <img> tag với CSS image-orientation: from-image
-     Browser sẽ tự xoay đúng chiều, sau đó ta snapshot ra canvas */
-  var wrapper = document.createElement('img');
-  wrapper.style.cssText = 'position:absolute;visibility:hidden;image-orientation:from-image;';
-  document.body.appendChild(wrapper);
-
-  wrapper.onload = function () {
-    /* Lấy kích thước sau khi browser áp EXIF (naturalWidth/Height đã đúng chiều) */
-    var w = wrapper.naturalWidth;
-    var h = wrapper.naturalHeight;
-    _tmpCanvas.width  = w;
-    _tmpCanvas.height = h;
-    _tmpCtx.clearRect(0, 0, w, h);
-    _tmpCtx.drawImage(wrapper, 0, 0, w, h);
-
-    /* Tạo ImageBitmap từ canvas để dùng trong trail canvas */
-    if (window.createImageBitmap) {
-      createImageBitmap(_tmpCanvas).then(function (bmp) {
-        document.body.removeChild(wrapper);
-        callback(bmp, w, h);
-      });
-    } else {
-      /* Fallback: dùng luôn wrapper img */
-      document.body.removeChild(wrapper);
-      callback(wrapper, w, h);
-    }
-  };
-
-  wrapper.onerror = function () {
-    document.body.removeChild(wrapper);
-    callback(null, 0, 0);
-  };
-
-  wrapper.src = im.src;
-}
+/* CSS ép browser đọc EXIF orientation */
+var _styleEl = document.createElement('style');
+_styleEl.innerHTML = '.trail-img-hidden { image-orientation: from-image !important; }';
+document.head.appendChild(_styleEl);
 
 function getImage(idx) {
   if (cache[idx]) return cache[idx];
-  var entry = { img: null, loaded: false, w: 0, h: 0 };
+  var entry = { img: null, loaded: false };
   cache[idx] = entry;
 
   var im = new Image();
-  im.crossOrigin = 'anonymous';
+  /* CSS image-orientation: from-image — browser tự xoay đúng EXIF */
+  im.className = 'trail-img-hidden';
+  im.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;image-orientation:from-image;';
+  document.body.appendChild(im);
+
   im.onload = function () {
-    normalizeImage(im, function (bmp, w, h) {
-      entry.img    = bmp;
-      entry.w      = w;
-      entry.h      = h;
-      entry.loaded = true;
-    });
+    entry.img    = im;
+    entry.loaded = true;
+    /* Ẩn khỏi DOM nhưng giữ object để drawImage */
+    im.style.visibility = 'hidden';
+    im.style.position   = 'absolute';
+    im.style.left       = '-9999px';
   };
-  im.onerror = function () { entry.loaded = true; };
+  im.onerror = function () {
+    entry.loaded = true;
+    if (im.parentNode) im.parentNode.removeChild(im);
+  };
+
   im.src = IMG_DIR + 'img' + (idx + 1) + IMG_EXT;
   return entry;
 }
@@ -212,7 +184,7 @@ CanvasTrail.prototype._loop = function () {
       ctx.rotate(p.rot);
 
       if (!p.entry.img) {
-        /* Fallback màu */
+        /* Fallback màu khi ảnh lỗi */
         var wf = MAX_SIZE * scale;
         var hf = MAX_SIZE * 0.75 * scale;
         var grad = ctx.createLinearGradient(-wf/2, -hf/2, wf/2, hf/2);
@@ -224,9 +196,9 @@ CanvasTrail.prototype._loop = function () {
         else               ctx.rect(-wf/2, -hf/2, wf, hf);
         ctx.fill();
       } else {
-        /* Dùng kích thước đã normalize (đúng chiều sau EXIF) */
-        var natW  = p.entry.w || MAX_SIZE;
-        var natH  = p.entry.h || MAX_SIZE;
+        /* drawImage trực tiếp — browser đã xử lý EXIF qua CSS image-orientation */
+        var natW  = p.entry.img.naturalWidth  || MAX_SIZE;
+        var natH  = p.entry.img.naturalHeight || MAX_SIZE;
         var ratio = natW / natH;
         var w, h;
         if (ratio >= 1) {
