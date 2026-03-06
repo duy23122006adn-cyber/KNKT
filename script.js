@@ -160,7 +160,20 @@ ImageTrail.prototype._buildPool = function () {
     inner.className = 'trail__img';
     outer.appendChild(inner);
     frag.appendChild(outer);
-    this._pool.push(new TrailImage(outer, IMG_DIR + 'img' + (i + 1) + IMG_EXT));
+
+    var src = IMG_DIR + 'img' + (i + 1) + IMG_EXT;
+    var item = new TrailImage(outer, src);
+
+    // Preload từng ảnh, đánh dấu khi sẵn sàng
+    item._loaded = false;
+    (function (it) {
+      var img = new Image();
+      img.onload  = function () { it._loaded = true; };
+      img.onerror = function () { it._loaded = true; }; // lỗi cũng cho qua
+      img.src = it._src;
+    })(item);
+
+    this._pool.push(item);
   }
   this.DOM.el.appendChild(frag);
 };
@@ -172,8 +185,17 @@ ImageTrail.prototype._dist = function (a, b) {
 
 ImageTrail.prototype._spawn = function (x, y) {
   if (this._active.length >= MAX_VISIBLE) this._active.shift().hide();
-  var item = this._pool[this._nextIdx % TOTAL_IMAGES];
-  this._nextIdx++;
+
+  // Tìm ảnh đã load — bỏ qua ảnh chưa sẵn sàng (tối đa thử 10 slot)
+  var item, tries = 0;
+  do {
+    item = this._pool[this._nextIdx % TOTAL_IMAGES];
+    this._nextIdx++;
+    tries++;
+  } while (!item._loaded && tries < 10);
+
+  if (!item._loaded) return; // tất cả chưa load → bỏ qua lần này
+
   item.show(x, y, Utils.getRandomNumber(-12, 12));
   this._active.push(item);
 };
@@ -277,14 +299,14 @@ function initTrail() {
     if (cursorEl) new Cursor(cursorEl, pos);
   }
 
-  /* Preload batch nhỏ hơn trên mobile */
+  /* Khởi động trail NGAY — không chờ preload */
+  document.body.classList.remove('loading');
+  var container = document.getElementById('trailContainer');
+  if (container) new ImageTrail(container, pos);
+
+  /* Preload ngầm sau khi trail đã chạy */
   var batchSize = IS_MOBILE ? 10 : 20;
   var srcs = [];
   for (var i = 1; i <= TOTAL_IMAGES; i++) srcs.push(IMG_DIR + 'img' + i + IMG_EXT);
-
-  Utils.preloadImages(srcs, batchSize).then(function () {
-    document.body.classList.remove('loading');
-    var container = document.getElementById('trailContainer');
-    if (container) new ImageTrail(container, pos);
-  });
+  Utils.preloadImages(srcs, batchSize);
 }
