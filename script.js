@@ -18,15 +18,12 @@ setTimeout(function () {
 
 var btnNext = document.getElementById('btn-next');
 function goPage2() {
-  prewarm(); // bắt đầu load ảnh NGAY khi nhấn nút
+  prewarm(); // load ảnh ngay khi chuyển trang
   document.body.classList.add('go-page2');
   setTimeout(initTrail, 950);
 }
 btnNext.addEventListener('click', goPage2);
-btnNext.addEventListener('touchend', function (e) {
-  e.preventDefault();
-  goPage2();
-});
+btnNext.addEventListener('touchend', function (e) { e.preventDefault(); goPage2(); });
 
 /* ═══════════════════════════════════════════
    DEVICE DETECT
@@ -40,7 +37,7 @@ var IS_MOBILE = IS_TOUCH && window.screen.width <= 900;
 var CFG = {
   totalImages : 150,
   imgDir      : './img/',
-  imgExt      : '.webp',
+  imgExt      : '.png',
   minDist     : IS_MOBILE ? 55  : 90,
   poolSize    : IS_MOBILE ? 6   : 10,
   imgW        : IS_MOBILE ? 110 : 210,
@@ -297,9 +294,11 @@ function initTrail() {
   document.body.classList.remove('loading');
 
   var page2 = document.getElementById('page2');
-  var pos   = { x: -9999, y: -9999 }; // ngoài màn hình → không spawn ngay
+  var pos   = { x: -9999, y: -9999 };
+  var trail;
+  var eventsEnabled = false;
 
-  // Throttle helper: cập nhật pos tối đa 1 lần / RAF frame
+  // Throttle helper
   var pendingX = 0, pendingY = 0, pending = false;
   function scheduleUpdate(x, y) {
     pendingX = x; pendingY = y;
@@ -312,45 +311,65 @@ function initTrail() {
     }
   }
 
-  var trail; // khai báo trước để wakeUp có thể gọi
+  // Hàm bật events — chỉ gọi sau khi bấm nút bất ngờ
+  function enableEvents() {
+    if (eventsEnabled) return;
+    eventsEnabled = true;
 
-  // Mouse (desktop)
-  if (!IS_TOUCH) {
-    window.addEventListener('mousemove', function (ev) {
-      scheduleUpdate(ev.clientX, ev.clientY);
+    if (!IS_TOUCH) {
+      window.addEventListener('mousemove', function (ev) {
+        scheduleUpdate(ev.clientX, ev.clientY);
+        if (trail) trail.wakeUp();
+      }, { passive: true });
+    }
+
+    page2.addEventListener('touchmove', function (ev) {
+      ev.preventDefault();
+      var t = ev.touches[0];
+      scheduleUpdate(t.clientX, t.clientY);
+      if (trail) trail.wakeUp();
+    }, { passive: false });
+
+    page2.addEventListener('touchstart', function (ev) {
+      var t = ev.touches[0];
+      scheduleUpdate(t.clientX, t.clientY);
       if (trail) trail.wakeUp();
     }, { passive: true });
   }
 
-  // Touch (mobile / tablet)
-  page2.addEventListener('touchmove', function (ev) {
-    ev.preventDefault();
-    var t = ev.touches[0];
-    scheduleUpdate(t.clientX, t.clientY);
-    if (trail) trail.wakeUp();
-  }, { passive: false });
-
-  page2.addEventListener('touchstart', function (ev) {
-    var t = ev.touches[0];
-    scheduleUpdate(t.clientX, t.clientY);
-    if (trail) trail.wakeUp();
-  }, { passive: true });
-
   // Canvas
   var canvas = document.createElement('canvas');
-  canvas.style.cssText = [
-    'position:fixed', 'top:0', 'left:0',
-    'pointer-events:none', 'z-index:20',
-    'will-change:transform',
-    'transform:translateZ(0)'
-  ].join(';');
+  canvas.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:20;will-change:transform;transform:translateZ(0);';
   page2.appendChild(canvas);
-
   trail = new CanvasTrail(canvas, pos);
 
-  // Cursor chỉ trên desktop
+  // Cursor desktop
   if (!IS_TOUCH) {
     var cursorEl = document.querySelector('.cursor');
     if (cursorEl) new Cursor(cursorEl, pos);
+  }
+
+  // Hiện nút bất ngờ
+  var btnSurprise = document.getElementById('btn-surprise');
+  if (btnSurprise) {
+    setTimeout(function () {
+      btnSurprise.classList.add('visible');
+    }, 200);
+
+    function activateSurprise() {
+      btnSurprise.classList.remove('visible');
+      setTimeout(function () { btnSurprise.style.display = 'none'; }, 600);
+      enableEvents();
+      if (trail) trail.wakeUp();
+    }
+
+    btnSurprise.addEventListener('click', activateSurprise);
+    btnSurprise.addEventListener('touchend', function (e) {
+      e.preventDefault();
+      activateSurprise();
+    });
+  } else {
+    // Fallback: không có nút thì bật events luôn
+    enableEvents();
   }
 }
