@@ -88,33 +88,30 @@ function lookAhead(fromIdx) {
    Không bao giờ tạo object mới sau khi init
 ═══════════════════════════════════════════ */
 function makeSlot() {
-  return { img: null, x: 0, y: 0, rot: 0, age: 0, maxAge: 0, alive: false };
+  return { img: null, imgIdx: -1, x: 0, y: 0, rot: 0, age: 0, maxAge: 0, alive: false };
 }
 
 function Pool(size) {
-  this.slots  = [];
-  this.head   = 0;   // con trỏ ghi (vòng tròn)
-  this.count  = 0;   // số slot đang alive
+  this.slots = [];
+  this.head  = 0;
+  this.count = 0;
   for (var i = 0; i < size; i++) this.slots.push(makeSlot());
 }
 
-/* Trả về true nếu spawn thành công, false nếu pool đầy */
-Pool.prototype.spawn = function (img, x, y, rot, maxAge) {
-  if (this.count >= this.slots.length) return false; // HARD CAP
-  var p    = this.slots[this.head];
+/* Luôn spawn được — ghi đè slot cũ nhất khi pool đầy */
+Pool.prototype.spawn = function (imgIdx, img, x, y, rot, maxAge) {
+  var p = this.slots[this.head];
   this.head = (this.head + 1) % this.slots.length;
-  p.img    = img;
-  p.x      = x;   p.y   = y;
-  p.rot    = rot;  p.age = 0;
+  if (!p.alive) this.count++;
+  p.imgIdx = imgIdx;
+  p.img    = img;   // null nếu chưa load xong
+  p.x      = x;    p.y   = y;
+  p.rot    = rot;   p.age = 0;
   p.maxAge = maxAge;
   p.alive  = true;
-  this.count++;
-  return true;
 };
 
-Pool.prototype.anyAlive = function () {
-  return this.count > 0;
-};
+Pool.prototype.anyAlive = function () { return this.count > 0; };
 
 /* ═══════════════════════════════════════════
    CANVAS TRAIL
@@ -135,7 +132,6 @@ function CanvasTrail(canvas, pos) {
 
   this._resize();
   window.addEventListener('resize', this._resize.bind(this));
-  // Không start loop ngay — chờ tương tác đầu tiên
 }
 
 CanvasTrail.prototype._resize = function () {
@@ -148,40 +144,26 @@ CanvasTrail.prototype._resize = function () {
   this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 };
 
-/* Gọi mỗi khi có tương tác */
 CanvasTrail.prototype.wakeUp = function () {
   this.isIdle = false;
   clearTimeout(this.idleTimer);
-
-  // Khởi động RAF nếu đang dừng
   if (!this.rafId) {
     var self = this;
     this.rafId = requestAnimationFrame(function loop(ts) {
-      // Điều kiện dừng: idle + pool rỗng
       if (self.isIdle && !self.pool.anyAlive()) {
         cancelAnimationFrame(self.rafId);
         self.rafId = null;
-        // Xoá canvas lần cuối
-        self.ctx.clearRect(0, 0,
-          self.canvas.width / self.dpr,
-          self.canvas.height / self.dpr);
+        self.ctx.clearRect(0, 0, self.canvas.width / self.dpr, self.canvas.height / self.dpr);
         return;
       }
       self.rafId = requestAnimationFrame(loop);
-
-      // FPS throttle
       if (ts - self.lastTime < self.interval) return;
       self.lastTime = ts;
-
       self._tick();
     });
   }
-
-  // Đặt timer idle: 1.5s sau lần tương tác cuối
   var self = this;
-  this.idleTimer = setTimeout(function () {
-    self.isIdle = true;
-  }, 1500);
+  this.idleTimer = setTimeout(function () { self.isIdle = true; }, 1500);
 };
 
 CanvasTrail.prototype._dist = function (a, b) {
@@ -190,22 +172,13 @@ CanvasTrail.prototype._dist = function (a, b) {
 };
 
 CanvasTrail.prototype._spawn = function (x, y) {
-  var startIdx = this.nextImg;
-  var img = null, idx;
-
-  // Vòng lặp tìm ảnh đã sẵn sàng, tối đa 1 vòng qua toàn bộ pool
-  for (var tries = 0; tries < CFG.totalImages; tries++) {
-    idx = this.nextImg % CFG.totalImages;
-    this.nextImg++;
-    loadImg(idx);       // kích hoạt load nếu chưa
-    lookAhead(idx);     // load trước 5 ảnh tiếp theo
-    if (isReady(idx)) { img = _cache[idx]; break; }
-  }
-
-  if (!img) return; // chưa có ảnh nào load xong → bỏ qua lần này
-
+  var idx = this.nextImg % CFG.totalImages;
+  this.nextImg++;
+  loadImg(idx);
+  lookAhead(idx);
+  var img = isReady(idx) ? _cache[idx] : null;
   var rot = (Math.random() - 0.5) * 24 * Math.PI / 180;
-  this.pool.spawn(img, x, y, rot, CFG.totalFrames);
+  this.pool.spawn(idx, img, x, y, rot, CFG.totalFrames);
 };
 
 CanvasTrail.prototype._tick = function () {
@@ -213,7 +186,6 @@ CanvasTrail.prototype._tick = function () {
   var W   = this.canvas.width  / this.dpr;
   var H   = this.canvas.height / this.dpr;
 
-  // Spawn nếu di chuyển đủ xa
   if (this._dist(this.pos, this.lastSpawn) >= CFG.minDist) {
     this._spawn(this.pos.x, this.pos.y);
     this.lastSpawn.x = this.pos.x;
@@ -222,34 +194,38 @@ CanvasTrail.prototype._tick = function () {
 
   ctx.clearRect(0, 0, W, H);
 
-  // Render — loop trực tiếp trên mảng cố định, không tạo array mới
   var slots = this.pool.slots;
   for (var i = 0; i < slots.length; i++) {
     var p = slots[i];
     if (!p.alive) continue;
 
+    // Nếu ảnh chưa load lúc spawn, thử lấy lại
+    if (!p.img && p.imgIdx >= 0 && isReady(p.imgIdx)) {
+      p.img = _cache[p.imgIdx];
+    }
+
     p.age++;
     var t = p.age / p.maxAge;
 
-    // Alpha: ease-in 30% → hold → ease-out 40%
+    if (p.age >= p.maxAge) {
+      p.alive = false;
+      p.img   = null;
+      this.pool.count--;
+      continue;
+    }
+
+    if (!p.img) continue; // vẫn chưa load → skip render nhưng giữ slot
+
     var alpha;
     if      (t < 0.30) { alpha = t / 0.30; }
     else if (t < 0.60) { alpha = 1.0; }
     else               { alpha = 1.0 - (t - 0.60) / 0.40; }
     alpha *= 0.92;
 
-    // Scale: 0.6 → 1.0 → 0.85
     var sc;
     if      (t < 0.30) { sc = 0.6 + (t / 0.30) * 0.4; }
     else if (t < 0.60) { sc = 1.0; }
     else               { sc = 1.0 - (t - 0.60) / 0.40 * 0.15; }
-
-    if (p.age >= p.maxAge) {
-      p.alive = false;
-      p.img   = null; // release image ref
-      this.pool.count--;
-      continue;
-    }
 
     var w = CFG.imgW * sc;
     var h = CFG.imgH * sc;
