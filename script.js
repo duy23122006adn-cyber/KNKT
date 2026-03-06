@@ -1,116 +1,190 @@
 /**
  * script.js — Intro Hoa + Canvas Image Trail
+ * ─────────────────────────────────────────────
+ * Tối ưu:
+ *  1. Object Pool cố định — không push/shift/GC
+ *  2. Idle-aware RAF — tự cancelAnimationFrame khi rảnh
+ *  3. Throttled events — 1 lần cập nhật pos mỗi frame
+ *  4. Lazy + look-ahead preload — không nghẽn RAM
+ *  5. Hard spawn cap — pool đầy thì bỏ qua, không overwrite
  */
 
-/* ══════════════════════════════════════════════════════
-   TRANG 1 — INTRO HOA
-   ══════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════
+   TRANG 1 — HOA INTRO
+═══════════════════════════════════════════ */
 setTimeout(function () {
   document.body.classList.remove('not-loaded');
 }, 1000);
 
 var btnNext = document.getElementById('btn-next');
 function goPage2() {
+  prewarm(); // bắt đầu load ảnh NGAY khi nhấn nút
   document.body.classList.add('go-page2');
   setTimeout(initTrail, 950);
 }
 btnNext.addEventListener('click', goPage2);
-btnNext.addEventListener('touchend', function (e) { e.preventDefault(); goPage2(); });
+btnNext.addEventListener('touchend', function (e) {
+  e.preventDefault();
+  goPage2();
+});
 
-/* ══════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════
+   DEVICE DETECT
+═══════════════════════════════════════════ */
+var IS_TOUCH  = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+var IS_MOBILE = IS_TOUCH && window.screen.width <= 900;
+
+/* ═══════════════════════════════════════════
    CONFIG
-   ══════════════════════════════════════════════════════ */
-var TOTAL_IMAGES  = 150;
-var IMG_DIR       = './img/';
-var IMG_EXT       = '.webp';
+═══════════════════════════════════════════ */
+var CFG = {
+  totalImages : 150,
+  imgDir      : './img/',
+  imgExt      : '.webp',
+  minDist     : IS_MOBILE ? 55  : 90,
+  poolSize    : IS_MOBILE ? 6   : 10,
+  imgW        : IS_MOBILE ? 110 : 210,
+  imgH        : IS_MOBILE ? 83  : 158,
+  totalFrames : IS_MOBILE ? 36  : 65,
+  fpsCap      : IS_MOBILE ? 30  : 60,
+  prewarmN    : IS_MOBILE ? 20  : 30,
+  lookAheadN  : 5
+};
 
-var IS_TOUCH      = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-var IS_MOBILE     = IS_TOUCH && window.innerWidth <= 900;
+/* ═══════════════════════════════════════════
+   IMAGE CACHE — lazy + sequential
+   _cache[i] = null      : chưa bắt đầu
+   _cache[i] = 'loading' : đang load
+   _cache[i] = 'error'   : lỗi
+   _cache[i] = Image     : sẵn sàng ✓
+═══════════════════════════════════════════ */
+var _cache = [];
+(function(){ for(var i=0;i<CFG.totalImages;i++) _cache[i]=null; })();
 
-var MIN_DIST      = IS_MOBILE ? 60  : 100;
-var MAX_PARTICLES = IS_MOBILE ? 6   : 10;
-var MAX_SIZE      = IS_MOBILE ? 120 : 220;
-var TOTAL_FRAMES  = IS_MOBILE ? 40  : 70;
-var FPS_CAP       = IS_MOBILE ? 30  : 60;
-
-var FALLBACK_COLORS = [
-  '#ff6b9d','#ff8fab','#ffb3c6','#ffc8dd','#ff85a1',
-  '#ff6b6b','#ffa07a','#ff7f50','#ff69b4','#db7093',
-  '#c71585','#ff1493','#ff4500','#ff6347','#ff8c00',
-  '#e91e63','#f06292','#f48fb1','#f8bbd0','#ad1457'
-];
-
-/* ══════════════════════════════════════════════════════
-   IMAGE CACHE
-   Dùng <img> với CSS image-orientation:from-image
-   Browser tự xử lý EXIF → drawImage sẽ đúng chiều
-   KHÔNG dùng crossOrigin / createImageBitmap / canvas tạm
-   ══════════════════════════════════════════════════════ */
-var cache = {};
-
-/* CSS ép browser đọc EXIF orientation */
-var _styleEl = document.createElement('style');
-_styleEl.innerHTML = '.trail-img-hidden { image-orientation: from-image !important; }';
-document.head.appendChild(_styleEl);
-
-function getImage(idx) {
-  if (cache[idx]) return cache[idx];
-  var entry = { img: null, loaded: false };
-  cache[idx] = entry;
-
-  var im = new Image();
-  /* CSS image-orientation: from-image — browser tự xoay đúng EXIF */
-  im.className = 'trail-img-hidden';
-  im.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;image-orientation:from-image;';
-  document.body.appendChild(im);
-
-  im.onload = function () {
-    entry.img    = im;
-    entry.loaded = true;
-    /* Ẩn khỏi DOM nhưng giữ object để drawImage */
-    im.style.visibility = 'hidden';
-    im.style.position   = 'absolute';
-    im.style.left       = '-9999px';
-  };
-  im.onerror = function () {
-    entry.loaded = true;
-    if (im.parentNode) im.parentNode.removeChild(im);
-  };
-
-  im.src = IMG_DIR + 'img' + (idx + 1) + IMG_EXT;
-  return entry;
+function loadImg(idx) {
+  if (_cache[idx] !== null) return; // đã load hoặc đang load
+  _cache[idx] = 'loading';
+  (function(i){
+    var im = new Image();
+    im.onload  = function () { _cache[i] = im; };
+    im.onerror = function () { _cache[i] = 'error'; };
+    im.src = CFG.imgDir + 'img' + (i + 1) + CFG.imgExt;
+  })(idx);
 }
 
-function prewarm(n) {
-  for (var i = 0; i < Math.min(n, TOTAL_IMAGES); i++) getImage(i);
+function isReady(idx) {
+  return (_cache[idx] instanceof Image);
 }
 
-/* ══════════════════════════════════════════════════════
+function prewarm() {
+  for (var i = 0; i < CFG.prewarmN; i++) loadImg(i);
+}
+
+function lookAhead(fromIdx) {
+  for (var k = 1; k <= CFG.lookAheadN; k++) {
+    loadImg((fromIdx + k) % CFG.totalImages);
+  }
+}
+
+/* ═══════════════════════════════════════════
+   OBJECT POOL — kích thước cố định, vòng tròn
+   Không bao giờ tạo object mới sau khi init
+═══════════════════════════════════════════ */
+function makeSlot() {
+  return { img: null, x: 0, y: 0, rot: 0, age: 0, maxAge: 0, alive: false };
+}
+
+function Pool(size) {
+  this.slots  = [];
+  this.head   = 0;   // con trỏ ghi (vòng tròn)
+  this.count  = 0;   // số slot đang alive
+  for (var i = 0; i < size; i++) this.slots.push(makeSlot());
+}
+
+/* Trả về true nếu spawn thành công, false nếu pool đầy */
+Pool.prototype.spawn = function (img, x, y, rot, maxAge) {
+  if (this.count >= this.slots.length) return false; // HARD CAP
+  var p    = this.slots[this.head];
+  this.head = (this.head + 1) % this.slots.length;
+  p.img    = img;
+  p.x      = x;   p.y   = y;
+  p.rot    = rot;  p.age = 0;
+  p.maxAge = maxAge;
+  p.alive  = true;
+  this.count++;
+  return true;
+};
+
+Pool.prototype.anyAlive = function () {
+  return this.count > 0;
+};
+
+/* ═══════════════════════════════════════════
    CANVAS TRAIL
-   ══════════════════════════════════════════════════════ */
+═══════════════════════════════════════════ */
 function CanvasTrail(canvas, pos) {
   this.canvas    = canvas;
   this.ctx       = canvas.getContext('2d');
   this.pos       = pos;
-  this.lastPos   = { x: -9999, y: -9999 };
-  this.nextIdx   = 0;
-  this.particles = [];
+  this.lastSpawn = { x: -9999, y: -9999 };
+  this.nextImg   = 0;
+  this.pool      = new Pool(CFG.poolSize);
   this.dpr       = Math.min(window.devicePixelRatio || 1, 2);
+  this.rafId     = null;
+  this.isIdle    = true;
+  this.idleTimer = null;
+  this.interval  = 1000 / CFG.fpsCap;
+  this.lastTime  = 0;
 
   this._resize();
   window.addEventListener('resize', this._resize.bind(this));
-  this._loop();
+  // Không start loop ngay — chờ tương tác đầu tiên
 }
 
 CanvasTrail.prototype._resize = function () {
   this.dpr = Math.min(window.devicePixelRatio || 1, 2);
-  var w = window.innerWidth;
-  var h = window.innerHeight;
+  var w = window.innerWidth, h = window.innerHeight;
   this.canvas.width  = w * this.dpr;
   this.canvas.height = h * this.dpr;
   this.canvas.style.width  = w + 'px';
   this.canvas.style.height = h + 'px';
   this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+};
+
+/* Gọi mỗi khi có tương tác */
+CanvasTrail.prototype.wakeUp = function () {
+  this.isIdle = false;
+  clearTimeout(this.idleTimer);
+
+  // Khởi động RAF nếu đang dừng
+  if (!this.rafId) {
+    var self = this;
+    this.rafId = requestAnimationFrame(function loop(ts) {
+      // Điều kiện dừng: idle + pool rỗng
+      if (self.isIdle && !self.pool.anyAlive()) {
+        cancelAnimationFrame(self.rafId);
+        self.rafId = null;
+        // Xoá canvas lần cuối
+        self.ctx.clearRect(0, 0,
+          self.canvas.width / self.dpr,
+          self.canvas.height / self.dpr);
+        return;
+      }
+      self.rafId = requestAnimationFrame(loop);
+
+      // FPS throttle
+      if (ts - self.lastTime < self.interval) return;
+      self.lastTime = ts;
+
+      self._tick();
+    });
+  }
+
+  // Đặt timer idle: 1.5s sau lần tương tác cuối
+  var self = this;
+  this.idleTimer = setTimeout(function () {
+    self.isIdle = true;
+  }, 1500);
 };
 
 CanvasTrail.prototype._dist = function (a, b) {
@@ -119,171 +193,162 @@ CanvasTrail.prototype._dist = function (a, b) {
 };
 
 CanvasTrail.prototype._spawn = function (x, y) {
-  var idx = this.nextIdx % TOTAL_IMAGES;
-  this.nextIdx++;
-  for (var k = 1; k <= 3; k++) getImage((idx + k) % TOTAL_IMAGES);
+  var startIdx = this.nextImg;
+  var img = null, idx;
 
-  var entry = getImage(idx);
-  var rot   = (Math.random() - 0.5) * 24 * Math.PI / 180;
-  var ci    = idx % FALLBACK_COLORS.length;
-
-  this.particles.push({
-    entry         : entry,
-    x             : x,
-    y             : y,
-    rot           : rot,
-    age           : 0,
-    maxAge        : TOTAL_FRAMES,
-    fallbackColor : FALLBACK_COLORS[ci],
-    fallbackColor2: FALLBACK_COLORS[(ci + 10) % FALLBACK_COLORS.length]
-  });
-
-  if (this.particles.length > MAX_PARTICLES) this.particles.shift();
-};
-
-CanvasTrail.prototype._loop = function () {
-  var self     = this;
-  var lastTime = 0;
-  var interval = 1000 / FPS_CAP;
-
-  function frame(ts) {
-    requestAnimationFrame(frame);
-    if (ts - lastTime < interval) return;
-    lastTime = ts;
-
-    if (self._dist(self.pos, self.lastPos) >= MIN_DIST) {
-      self._spawn(self.pos.x, self.pos.y);
-      self.lastPos = { x: self.pos.x, y: self.pos.y };
-    }
-
-    var ctx = self.ctx;
-    ctx.clearRect(0, 0,
-      self.canvas.width  / self.dpr,
-      self.canvas.height / self.dpr);
-
-    self.particles = self.particles.filter(function (p) {
-      p.age++;
-      var t = p.age / p.maxAge;
-
-      var alpha;
-      if      (t < 0.30) { alpha = t / 0.30; }
-      else if (t < 0.60) { alpha = 1.0; }
-      else               { alpha = 1.0 - (t - 0.60) / 0.40; }
-      alpha *= 0.92;
-
-      var scale;
-      if      (t < 0.30) { scale = 0.6 + (t / 0.30) * 0.4; }
-      else if (t < 0.60) { scale = 1.0; }
-      else               { scale = 1.0 - (t - 0.60) / 0.40 * 0.15; }
-
-      if (!p.entry.loaded) return p.age < p.maxAge;
-
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.translate(p.x, p.y);
-      ctx.rotate(p.rot);
-
-      if (!p.entry.img) {
-        /* Fallback màu khi ảnh lỗi */
-        var wf = MAX_SIZE * scale;
-        var hf = MAX_SIZE * 0.75 * scale;
-        var grad = ctx.createLinearGradient(-wf/2, -hf/2, wf/2, hf/2);
-        grad.addColorStop(0, p.fallbackColor);
-        grad.addColorStop(1, p.fallbackColor2);
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(-wf/2, -hf/2, wf, hf, 8);
-        else               ctx.rect(-wf/2, -hf/2, wf, hf);
-        ctx.fill();
-      } else {
-        /* drawImage trực tiếp — browser đã xử lý EXIF qua CSS image-orientation */
-        var natW  = p.entry.img.naturalWidth  || MAX_SIZE;
-        var natH  = p.entry.img.naturalHeight || MAX_SIZE;
-        var ratio = natW / natH;
-        var w, h;
-        if (ratio >= 1) {
-          w = MAX_SIZE * scale;
-          h = (MAX_SIZE / ratio) * scale;
-        } else {
-          h = MAX_SIZE * scale;
-          w = (MAX_SIZE * ratio) * scale;
-        }
-        ctx.drawImage(p.entry.img, -w / 2, -h / 2, w, h);
-      }
-
-      ctx.restore();
-      return p.age < p.maxAge;
-    });
+  // Vòng lặp tìm ảnh đã sẵn sàng, tối đa 1 vòng qua toàn bộ pool
+  for (var tries = 0; tries < CFG.totalImages; tries++) {
+    idx = this.nextImg % CFG.totalImages;
+    this.nextImg++;
+    loadImg(idx);       // kích hoạt load nếu chưa
+    lookAhead(idx);     // load trước 5 ảnh tiếp theo
+    if (isReady(idx)) { img = _cache[idx]; break; }
   }
 
-  requestAnimationFrame(frame);
+  if (!img) return; // chưa có ảnh nào load xong → bỏ qua lần này
+
+  var rot = (Math.random() - 0.5) * 24 * Math.PI / 180;
+  this.pool.spawn(img, x, y, rot, CFG.totalFrames);
 };
 
-/* ══════════════════════════════════════════════════════
-   CURSOR (desktop only)
-   ══════════════════════════════════════════════════════ */
-function Cursor(el, pos) {
-  this.el  = el;
-  this.pos = pos;
-  this.tx  = 0;
-  this.ty  = 0;
-  el.style.opacity = 0;
+CanvasTrail.prototype._tick = function () {
+  var ctx = this.ctx;
+  var W   = this.canvas.width  / this.dpr;
+  var H   = this.canvas.height / this.dpr;
 
-  var self = this;
+  // Spawn nếu di chuyển đủ xa
+  if (this._dist(this.pos, this.lastSpawn) >= CFG.minDist) {
+    this._spawn(this.pos.x, this.pos.y);
+    this.lastSpawn.x = this.pos.x;
+    this.lastSpawn.y = this.pos.y;
+  }
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Render — loop trực tiếp trên mảng cố định, không tạo array mới
+  var slots = this.pool.slots;
+  for (var i = 0; i < slots.length; i++) {
+    var p = slots[i];
+    if (!p.alive) continue;
+
+    p.age++;
+    var t = p.age / p.maxAge;
+
+    // Alpha: ease-in 30% → hold → ease-out 40%
+    var alpha;
+    if      (t < 0.30) { alpha = t / 0.30; }
+    else if (t < 0.60) { alpha = 1.0; }
+    else               { alpha = 1.0 - (t - 0.60) / 0.40; }
+    alpha *= 0.92;
+
+    // Scale: 0.6 → 1.0 → 0.85
+    var sc;
+    if      (t < 0.30) { sc = 0.6 + (t / 0.30) * 0.4; }
+    else if (t < 0.60) { sc = 1.0; }
+    else               { sc = 1.0 - (t - 0.60) / 0.40 * 0.15; }
+
+    if (p.age >= p.maxAge) {
+      p.alive = false;
+      p.img   = null; // release image ref
+      this.pool.count--;
+      continue;
+    }
+
+    var w = CFG.imgW * sc;
+    var h = CFG.imgH * sc;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rot);
+    ctx.drawImage(p.img, -w * 0.5, -h * 0.5, w, h);
+    ctx.restore();
+  }
+};
+
+/* ═══════════════════════════════════════════
+   CURSOR (desktop only)
+═══════════════════════════════════════════ */
+function Cursor(el, pos) {
+  var tx = 0, ty = 0;
+  el.style.opacity = 0;
   window.addEventListener('mousemove', function onFirst() {
-    self.tx = pos.x - 40;
-    self.ty = pos.y - 40;
+    tx = pos.x - 40; ty = pos.y - 40;
     gsap.to(el, { duration: 0.7, opacity: 1 });
     (function loop() {
-      self.tx += (pos.x - 40 - self.tx) * 0.18;
-      self.ty += (pos.y - 40 - self.ty) * 0.18;
-      el.style.transform = 'translate(' + self.tx + 'px,' + self.ty + 'px)';
+      tx += (pos.x - 40 - tx) * 0.18;
+      ty += (pos.y - 40 - ty) * 0.18;
+      el.style.transform = 'translate(' + tx + 'px,' + ty + 'px)';
       requestAnimationFrame(loop);
     })();
     window.removeEventListener('mousemove', onFirst);
   });
 }
 
-/* ══════════════════════════════════════════════════════
-   INIT
-   ══════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════
+   INIT TRAIL
+═══════════════════════════════════════════ */
 var trailInited = false;
 
 function initTrail() {
   if (trailInited) return;
   trailInited = true;
 
-  prewarm(10);
+  document.body.classList.remove('loading');
 
   var page2 = document.getElementById('page2');
-  var pos   = {
-    x: window.innerWidth  / 2,
-    y: window.innerHeight / 2
-  };
+  var pos   = { x: -9999, y: -9999 }; // ngoài màn hình → không spawn ngay
 
-  window.addEventListener('mousemove', function (ev) {
-    pos.x = ev.clientX;
-    pos.y = ev.clientY;
-  });
+  // Throttle helper: cập nhật pos tối đa 1 lần / RAF frame
+  var pendingX = 0, pendingY = 0, pending = false;
+  function scheduleUpdate(x, y) {
+    pendingX = x; pendingY = y;
+    if (!pending) {
+      pending = true;
+      requestAnimationFrame(function () {
+        pos.x = pendingX; pos.y = pendingY;
+        pending = false;
+      });
+    }
+  }
 
+  var trail; // khai báo trước để wakeUp có thể gọi
+
+  // Mouse (desktop)
+  if (!IS_TOUCH) {
+    window.addEventListener('mousemove', function (ev) {
+      scheduleUpdate(ev.clientX, ev.clientY);
+      if (trail) trail.wakeUp();
+    }, { passive: true });
+  }
+
+  // Touch (mobile / tablet)
   page2.addEventListener('touchmove', function (ev) {
     ev.preventDefault();
-    pos.x = ev.touches[0].clientX;
-    pos.y = ev.touches[0].clientY;
+    var t = ev.touches[0];
+    scheduleUpdate(t.clientX, t.clientY);
+    if (trail) trail.wakeUp();
   }, { passive: false });
 
   page2.addEventListener('touchstart', function (ev) {
-    pos.x = ev.touches[0].clientX;
-    pos.y = ev.touches[0].clientY;
+    var t = ev.touches[0];
+    scheduleUpdate(t.clientX, t.clientY);
+    if (trail) trail.wakeUp();
   }, { passive: true });
 
-  document.body.classList.remove('loading');
-
+  // Canvas
   var canvas = document.createElement('canvas');
-  canvas.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:20;';
+  canvas.style.cssText = [
+    'position:fixed', 'top:0', 'left:0',
+    'pointer-events:none', 'z-index:20',
+    'will-change:transform',
+    'transform:translateZ(0)'
+  ].join(';');
   page2.appendChild(canvas);
-  new CanvasTrail(canvas, pos);
 
+  trail = new CanvasTrail(canvas, pos);
+
+  // Cursor chỉ trên desktop
   if (!IS_TOUCH) {
     var cursorEl = document.querySelector('.cursor');
     if (cursorEl) new Cursor(cursorEl, pos);
