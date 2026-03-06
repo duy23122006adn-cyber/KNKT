@@ -327,8 +327,8 @@ body.go-page2 #page2 { transform: translateX(0);     opacity: 1; z-index: 10; }
 
 .trail__img { width:100%; height:100%; background-size:cover; background-position:50% 50%; border-radius:7px; box-shadow:0 8px 28px rgba(0,0,0,.6); }
 
-.content__title { font-family:myFont,serif; font-weight:400; font-size:10vw; margin:10px 0; line-height:1; position:relative; z-index:30; }
-.content__title-sub { color:var(--color-content-title-sub); font-size:4vw; display:block; margin-left:3vw; line-height:.5; }
+.content__title { font-family:myFont,serif; font-weight:400; font-size:10vw; margin:10px 0; line-height:1.2; position:relative; z-index:30; }
+.content__title-sub { color:var(--color-content-title-sub); font-size:4vw; display:block; margin-left:3vw; line-height:1.4; margin-top: 8px; }
 
 .cursor { display:none; }
 
@@ -362,8 +362,8 @@ body.go-page2 #page2 { transform: translateX(0);     opacity: 1; z-index: 10; }
   .trail__img {
     box-shadow: none;
   }
-  .content__title     { font-size: 18vw; }
-  .content__title-sub { font-size: 6vw; margin-left: 4vw; }
+  .content__title     { font-size: 18vw; line-height: 1.2; }
+  .content__title-sub { font-size: 5.5vw; margin-left: 2vw; line-height: 1.5; margin-top: 12px; }
   #btn-next           { padding: 16px 44px; font-size: 16px; bottom: 60px; }
   .happy-woman-day    { font-size: clamp(14px, 5vw, 28px); top: 40px; }
 }
