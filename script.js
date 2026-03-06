@@ -44,7 +44,7 @@ var CFG = {
   imgH        : IS_MOBILE ? 83  : 158,
   totalFrames : IS_MOBILE ? 36  : 65,
   fpsCap      : IS_MOBILE ? 30  : 60,
-  prewarmN    : IS_MOBILE ? 20  : 30,
+  prewarmN    : IS_MOBILE ? 40  : 60,
   lookAheadN  : 5
 };
 
@@ -163,7 +163,7 @@ CanvasTrail.prototype.wakeUp = function () {
     });
   }
   var self = this;
-  this.idleTimer = setTimeout(function () { self.isIdle = true; }, 1500);
+  this.idleTimer = setTimeout(function () { self.isIdle = true; }, 3000);
 };
 
 CanvasTrail.prototype._dist = function (a, b) {
@@ -172,11 +172,18 @@ CanvasTrail.prototype._dist = function (a, b) {
 };
 
 CanvasTrail.prototype._spawn = function (x, y) {
-  var idx = this.nextImg % CFG.totalImages;
-  this.nextImg++;
-  loadImg(idx);
-  lookAhead(idx);
-  var img = isReady(idx) ? _cache[idx] : null;
+  // Tìm ảnh tiếp theo đã load — tối đa thử 20 slot liên tiếp
+  var img = null, idx, tries = 0;
+  while (tries < 20) {
+    idx = this.nextImg % CFG.totalImages;
+    this.nextImg++;
+    tries++;
+    loadImg(idx);
+    lookAhead(idx);
+    if (isReady(idx)) { img = _cache[idx]; break; }
+  }
+  if (!img) return; // 20 ảnh tiếp theo chưa load → bỏ qua lần spawn này
+
   var rot = (Math.random() - 0.5) * 24 * Math.PI / 180;
   this.pool.spawn(idx, img, x, y, rot, CFG.totalFrames);
 };
