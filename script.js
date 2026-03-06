@@ -1,7 +1,13 @@
 /**
  * script.js  —  Intro Hoa + Image Trail
- * Hỗ trợ: mousemove (desktop) + touchmove (iOS/Android)
+ * Tối ưu mobile: giảm số ảnh, threshold cao hơn, ít tween hơn
  */
+
+/* ══════════════════════════════════════════════════════
+   DETECT DEVICE
+   ══════════════════════════════════════════════════════ */
+var IS_TOUCH  = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+var IS_MOBILE = IS_TOUCH && window.innerWidth <= 768;
 
 /* ══════════════════════════════════════════════════════
    TRANG 1 — HOA INTRO
@@ -10,7 +16,6 @@ setTimeout(function () {
   document.body.classList.remove('not-loaded');
 }, 1000);
 
-// Nút "Tiếp tục" — hỗ trợ cả click lẫn touch
 var btnNext = document.getElementById('btn-next');
 function goPage2() {
   document.body.classList.add('go-page2');
@@ -18,7 +23,7 @@ function goPage2() {
 }
 btnNext.addEventListener('click', goPage2);
 btnNext.addEventListener('touchend', function (e) {
-  e.preventDefault(); // tránh ghost click trên iOS
+  e.preventDefault();
   goPage2();
 });
 
@@ -28,10 +33,7 @@ btnNext.addEventListener('touchend', function (e) {
    ══════════════════════════════════════════════════════ */
 var Utils = (function () {
   function lerp(a, b, t) { return a + (b - a) * t; }
-
-  function getRandomNumber(min, max) {
-    return Math.random() * (max - min) + min;
-  }
+  function getRandomNumber(min, max) { return Math.random() * (max - min) + min; }
 
   function preloadImages(srcs, batch) {
     batch = batch || 20;
@@ -47,9 +49,7 @@ var Utils = (function () {
             var img = new Image();
             img.onload = img.onerror = function () {
               count++;
-              if (!resolved && count >= Math.min(batch, total)) {
-                resolved = true; resolve();
-              }
+              if (!resolved && count >= Math.min(batch, total)) { resolved = true; resolve(); }
               if (count === size && end < total) loadBatch(end);
             };
             img.src = src;
@@ -66,21 +66,19 @@ var Utils = (function () {
 
 
 /* ══════════════════════════════════════════════════════
-   CONFIG
+   CONFIG — tự động điều chỉnh theo thiết bị
    ══════════════════════════════════════════════════════ */
 var TOTAL_IMAGES = 150;
 var IMG_DIR      = './img/';
 var IMG_EXT      = '.png';
-var MAX_VISIBLE  = 12;
 
-// Khoảng cách tối thiểu để spawn ảnh mới
-// Desktop dùng px lớn hơn vì chuột di chuyển nhanh hơn ngón tay
-var MIN_DISTANCE_MOUSE = 120;
-var MIN_DISTANCE_TOUCH = 60;   // ngón tay vuốt → threshold nhỏ hơn
-
-var FADE_IN_DUR  = 1.0;
-var HOLD_DUR     = 1.2;
-var FADE_OUT_DUR = 1.5;
+// Mobile nhẹ hơn: ít ảnh đồng thời + threshold lớn hơn + animation nhanh hơn
+var MAX_VISIBLE      = IS_MOBILE ? 5  : 12;
+var MIN_DIST_MOUSE   = 120;
+var MIN_DIST_TOUCH   = IS_MOBILE ? 80 : 60;
+var FADE_IN_DUR      = IS_MOBILE ? 0.4 : 1.0;
+var HOLD_DUR         = IS_MOBILE ? 0.5 : 1.2;
+var FADE_OUT_DUR     = IS_MOBILE ? 0.4 : 1.5;
 
 
 /* ══════════════════════════════════════════════════════
@@ -95,24 +93,43 @@ function TrailImage(el, src) {
 
 TrailImage.prototype.show = function (x, y, rotate) {
   var self = this;
-  if (this._tween) this._tween.kill();
+  if (this._tween) { this._tween.kill(); this._tween = null; }
   this._active = true;
   this.DOM.img.style.backgroundImage = 'url(' + this._src + ')';
 
+  // Dùng transform thuần thay vì left/top để bật GPU composite layer
   gsap.set(this.DOM.el, {
-    left: x, top: y,
-    xPercent: -50, yPercent: -50,
-    scale: 0.6, opacity: 0,
-    rotation: rotate, zIndex: 10
+    x:        x,
+    y:        y,
+    xPercent: -50,
+    yPercent: -50,
+    scale:    IS_MOBILE ? 0.7 : 0.6,
+    opacity:  0,
+    rotation: rotate,
+    zIndex:   10,
+    force3D:  true   // bắt buộc dùng translateZ(0) → GPU layer
   });
 
   this._tween = gsap.timeline({ onComplete: function () { self._active = false; } })
-    .to(this.DOM.el, { duration: FADE_IN_DUR, ease: 'power2.out', scale: 1, opacity: 0.92 })
-    .to(this.DOM.el, { duration: FADE_OUT_DUR, ease: 'power1.in', scale: 0.8, opacity: 0, delay: HOLD_DUR });
+    .to(this.DOM.el, {
+      duration: FADE_IN_DUR,
+      ease:     'power2.out',
+      scale:    1,
+      opacity:  IS_MOBILE ? 0.88 : 0.92,
+      force3D:  true
+    })
+    .to(this.DOM.el, {
+      duration: FADE_OUT_DUR,
+      ease:     'power1.in',
+      scale:    IS_MOBILE ? 0.85 : 0.8,
+      opacity:  0,
+      delay:    HOLD_DUR,
+      force3D:  true
+    });
 };
 
 TrailImage.prototype.hide = function () {
-  if (this._tween) this._tween.kill();
+  if (this._tween) { this._tween.kill(); this._tween = null; }
   gsap.set(this.DOM.el, { opacity: 0, scale: 0.6 });
   this._active = false;
 };
@@ -123,11 +140,12 @@ TrailImage.prototype.hide = function () {
    ══════════════════════════════════════════════════════ */
 function ImageTrail(container, pos) {
   this.DOM      = { el: container };
-  this._pos     = pos;           // { x, y, minDist } — shared, updated by event listeners
+  this._pos     = pos;
   this._lastPos = { x: -9999, y: -9999 };
   this._nextIdx = 0;
   this._pool    = [];
   this._active  = [];
+  this._rafId   = null;
 
   this._buildPool();
   this._startLoop();
@@ -162,25 +180,35 @@ ImageTrail.prototype._spawn = function (x, y) {
 
 ImageTrail.prototype._startLoop = function () {
   var self = this;
-  (function loop() {
-    var minD = self._pos.minDist || MIN_DISTANCE_MOUSE;
+  var minD = self._pos.minDist || MIN_DIST_MOUSE;
+
+  // Mobile: dùng throttle 30fps thay vì 60fps để giảm CPU
+  var lastFrame = 0;
+  var targetFPS = IS_MOBILE ? 30 : 60;
+  var interval  = 1000 / targetFPS;
+
+  (function loop(ts) {
+    self._rafId = requestAnimationFrame(loop);
+    if (IS_MOBILE && ts - lastFrame < interval) return; // throttle
+    lastFrame = ts;
+
+    minD = self._pos.minDist || MIN_DIST_MOUSE;
     if (self._dist(self._pos, self._lastPos) >= minD) {
       self._spawn(self._pos.x, self._pos.y);
       self._lastPos = { x: self._pos.x, y: self._pos.y };
     }
-    requestAnimationFrame(loop);
-  })();
+  })(0);
 };
 
 
 /* ══════════════════════════════════════════════════════
-   CURSOR (chỉ desktop)
+   CURSOR (desktop only)
    ══════════════════════════════════════════════════════ */
 function Cursor(el, pos) {
-  this.DOM   = { el: el };
-  this._pos  = pos;
-  this._tx   = { prev: 0, cur: 0, amt: 0.2 };
-  this._ty   = { prev: 0, cur: 0, amt: 0.2 };
+  this.DOM  = { el: el };
+  this._pos = pos;
+  this._tx  = { prev: 0, cur: 0, amt: 0.2 };
+  this._ty  = { prev: 0, cur: 0, amt: 0.2 };
   this.DOM.el.style.opacity = 0;
 
   var self = this;
@@ -188,10 +216,7 @@ function Cursor(el, pos) {
     self._tx.prev = self._tx.cur = self._pos.x - 40;
     self._ty.prev = self._ty.cur = self._pos.y - 40;
     gsap.to(self.DOM.el, { duration: 0.9, ease: 'power3.out', opacity: 1 });
-    (function loop() {
-      self._render();
-      requestAnimationFrame(loop);
-    })();
+    (function loop() { self._render(); requestAnimationFrame(loop); })();
     window.removeEventListener('mousemove', onFirst);
   };
   window.addEventListener('mousemove', onFirst);
@@ -216,51 +241,48 @@ function initTrail() {
   if (trailInited) return;
   trailInited = true;
 
-  // pos object dùng chung cho cả mouse và touch
   var pos = {
     x: window.innerWidth / 2,
     y: window.innerHeight / 2,
-    minDist: MIN_DISTANCE_MOUSE
+    minDist: MIN_DIST_MOUSE
   };
 
-  /* ── MOUSE (desktop) ── */
+  /* Mouse */
   window.addEventListener('mousemove', function (ev) {
     pos.x = ev.clientX;
     pos.y = ev.clientY;
-    pos.minDist = MIN_DISTANCE_MOUSE;
+    pos.minDist = MIN_DIST_MOUSE;
   });
 
-  /* ── TOUCH (iOS / Android) ── */
+  /* Touch */
   var page2 = document.getElementById('page2');
-
-  // Ngăn trang bị scroll khi vuốt trên trang 2
   page2.addEventListener('touchmove', function (ev) {
     ev.preventDefault();
     var t = ev.touches[0];
     pos.x = t.clientX;
     pos.y = t.clientY;
-    pos.minDist = MIN_DISTANCE_TOUCH;
+    pos.minDist = MIN_DIST_TOUCH;
   }, { passive: false });
 
-  // touchstart: spawn ngay tại điểm chạm đầu tiên
   page2.addEventListener('touchstart', function (ev) {
     var t = ev.touches[0];
     pos.x = t.clientX;
     pos.y = t.clientY;
-    pos.minDist = MIN_DISTANCE_TOUCH;
+    pos.minDist = MIN_DIST_TOUCH;
   }, { passive: true });
 
-  /* ── Cursor (chỉ hiện trên desktop có con trỏ chuột) ── */
-  var cursorEl = document.querySelector('.cursor');
-  if (cursorEl && window.matchMedia('(any-pointer: fine)').matches) {
-    new Cursor(cursorEl, pos);
+  /* Cursor — desktop only */
+  if (!IS_TOUCH) {
+    var cursorEl = document.querySelector('.cursor');
+    if (cursorEl) new Cursor(cursorEl, pos);
   }
 
-  /* ── Preload + khởi động ── */
+  /* Preload batch nhỏ hơn trên mobile */
+  var batchSize = IS_MOBILE ? 10 : 20;
   var srcs = [];
   for (var i = 1; i <= TOTAL_IMAGES; i++) srcs.push(IMG_DIR + 'img' + i + IMG_EXT);
 
-  Utils.preloadImages(srcs, 20).then(function () {
+  Utils.preloadImages(srcs, batchSize).then(function () {
     document.body.classList.remove('loading');
     var container = document.getElementById('trailContainer');
     if (container) new ImageTrail(container, pos);

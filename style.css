@@ -311,7 +311,19 @@ body.go-page2 #page2 { transform: translateX(0);     opacity: 1; z-index: 10; }
 
 #trailContainer { position:fixed; inset:0; pointer-events:none; z-index:20; overflow:visible; }
 
-.trail__item { position:absolute; top:0; left:0; width:320px; height:250px; pointer-events:none; will-change:transform,opacity; opacity:0; }
+.trail__item {
+  position: absolute;
+  top: 0; left: 0;
+  width: 320px;
+  height: 250px;
+  pointer-events: none;
+  /* GPU composite layer — quan trọng nhất để chống lag */
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  opacity: 0;
+}
 
 .trail__img { width:100%; height:100%; background-size:cover; background-position:50% 50%; border-radius:7px; box-shadow:0 8px 28px rgba(0,0,0,.6); }
 
@@ -333,50 +345,38 @@ body.go-page2 #page2 { transform: translateX(0);     opacity: 1; z-index: 10; }
   body.go-page2 { cursor:none; }
 }
 
-/* ══════════════════════════════════════════════════════
-   MOBILE / TOUCH — responsive fixes
-   ══════════════════════════════════════════════════════ */
+/* ── GPU tăng tốc cho tất cả animation ── */
+.trail__img {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
 
-/* Ẩn "please view on desktop" trên mọi màn hình */
-.message { display: none !important; }
+/* ── Mobile: ảnh nhỏ hơn, ít blur hơn ── */
+@media screen and (max-width: 768px) {
+  .trail__item {
+    width:  140px;
+    height: 110px;
+  }
+  /* Tắt box-shadow nặng trên mobile */
+  .trail__img {
+    box-shadow: none;
+  }
+  .content__title     { font-size: 18vw; }
+  .content__title-sub { font-size: 6vw; margin-left: 4vw; }
+  #btn-next           { padding: 16px 44px; font-size: 16px; bottom: 60px; }
+  .happy-woman-day    { font-size: clamp(14px, 5vw, 28px); top: 40px; }
+}
 
-/* Trang 2: tắt cursor:none trên touch device */
+/* ── Ẩn cursor trên touch ── */
 @media (any-pointer: coarse) {
   body.go-page2 { cursor: auto; }
   .cursor { display: none !important; }
 }
+.message { display: none !important; }
 
-/* Ảnh trail nhỏ hơn trên mobile để không che hết màn hình */
-@media screen and (max-width: 600px) {
-  .trail__item {
-    width:  160px;
-    height: 125px;
-  }
+body.go-page2 #page2 { touch-action: none; overflow: hidden; }
 
-  /* Title nhỏ hơn cho mobile */
-  .content__title { font-size: 18vw; }
-  .content__title-sub { font-size: 6vw; margin-left: 4vw; }
-
-  /* Nút tiếp tục dễ chạm hơn */
-  #btn-next {
-    padding: 16px 44px;
-    font-size: 16px;
-    bottom: 60px;   /* tránh safe area iOS */
-  }
-
-  /* Tên Happy Woman's Day nhỏ hơn */
-  .happy-woman-day { font-size: clamp(14px, 5vw, 28px); top: 40px; }
-}
-
-/* Trang 2 trên mobile: tắt overflow để vuốt không scroll trang */
-body.go-page2 #page2 {
-  touch-action: none;
-  overflow: hidden;
-}
-
-/* Safe area padding cho iPhone có notch/home indicator */
 @supports (padding: max(0px)) {
-  #btn-next {
-    bottom: max(44px, env(safe-area-inset-bottom) + 20px);
-  }
+  #btn-next { bottom: max(44px, calc(env(safe-area-inset-bottom) + 20px)); }
 }
