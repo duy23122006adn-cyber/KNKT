@@ -12,8 +12,9 @@
 }
 
 @font-face {
-  font-family: myFont;
-  src: url(Pacifico-Regular.ttf);
+  font-family: 'myFont';
+  src: url('./Pacifico-Regular.ttf') format('truetype');
+  font-display: swap;
 }
 
 html, body { width: 100%; height: 100%; overflow: hidden; }
@@ -319,15 +320,19 @@ body.go-page2 #page2 { transform: translateX(0);     opacity: 1; z-index: 10; }
   font-weight: 400;
   font-size: 10vw;
   margin: 10px 0;
-  line-height: 1;
+  line-height: 1.2;
   color: #d05400;
+  text-align: center;
 }
 .content__title-sub {
   color: var(--color-content-title-sub);
-  font-size: 4vw;
+  font-size: clamp(14px, 3.5vw, 26px);
   display: block;
-  margin-left: 3vw;
-  line-height: .5;
+  margin: 8px auto 0;
+  line-height: 1.6;
+  text-align: center;
+  padding: 0 24px;
+  max-width: 88vw;
 }
 
 /* Cursor — desktop only */
@@ -357,8 +362,8 @@ body.go-page2 #page2 { touch-action: none; overflow: hidden; }
    MOBILE
 ═══════════════════════════════════════════ */
 @media screen and (max-width: 768px) {
-  .content__title     { font-size: 18vw; }
-  .content__title-sub { font-size: 6vw; margin-left: 4vw; }
+  .content__title     { font-size: 15vw; line-height: 1.2; }
+  .content__title-sub { font-size: clamp(13px, 4vw, 18px); line-height: 1.6; padding: 0 20px; margin-left: 0; }
   .happy-woman-day    { font-size: clamp(14px, 5vw, 28px); top: 40px; }
   #btn-next           { padding: 16px 44px; font-size: 16px; }
 }
@@ -425,4 +430,23 @@ body.go-page2 #page2 { touch-action: none; overflow: hidden; }
 #btn-surprise:not(.visible) {
   opacity: 0;
   transform: translate(-50%, -50%) scale(0.85);
+}
+
+/* ── Hint text dưới nút bất ngờ ── */
+#surprise-hint {
+  position: fixed;
+  top: calc(50% + 70px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: clamp(11px, 2vw, 14px);
+  letter-spacing: 1px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  white-space: nowrap;
+}
+#surprise-hint.visible {
+  opacity: 1;
 }
