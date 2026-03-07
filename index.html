@@ -10,7 +10,7 @@
     document.documentElement.className = 'js';
     (function () {
       var t = document.createElement('style');
-      t.innerHTML = 'root: { --tmp-var: bold; }';
+      t.innerHTML = ':root { --tmp-var: bold; }';
       document.head.appendChild(t);
       var ok = !!(window.CSS && window.CSS.supports && window.CSS.supports('font-weight', 'var(--tmp-var)'));
       t.parentNode.removeChild(t);
@@ -135,6 +135,8 @@
 
     <!-- Nút bất ngờ — hiện giữa màn hình, bấm mới bắt đầu trail -->
     <button id="btn-surprise">🎁 Bấm vào là có bất ngờ</button>
+    <!-- Hint nhỏ bên dưới nút -->
+    <p id="surprise-hint">Đang chuẩn bị bất ngờ cho bạn...</p>
 
     <svg class="cursor" width="80" height="80" viewBox="0 0 80 80">
       <circle class="cursor__inner" cx="40" cy="40" r="20"></circle>
