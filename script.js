@@ -417,7 +417,8 @@ function initTrail() {
       hintEl.classList.remove('visible');
       setTimeout(function () { hintEl.style.display = 'none'; }, 500);
     }
-    page2.classList.add('revealed'); // hiện chữ KNKT + sub
+    // Hiện chữ KNKT + dòng sub
+    page2.classList.add('revealed');
     enableEvents();
     if (trail) trail.wakeUp();
   }

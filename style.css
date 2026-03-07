@@ -72,6 +72,12 @@ body.go-page2 #page2 { transform: translateX(0);     opacity: 1; z-index: 10; }
   width: 100%;
   text-align: center;
   z-index: 200;
+  opacity: 0;
+  transform: translateY(-10px);
+  animation: intro-text-in 1s 1.2s ease forwards;
+}
+@keyframes intro-text-in {
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* ── Nút Tiếp tục ── */
@@ -323,8 +329,9 @@ body.go-page2 #page2 { transform: translateX(0);     opacity: 1; z-index: 10; }
   line-height: 1.2;
   color: #d05400;
   text-align: center;
+  /* Ẩn mặc định — chỉ hiện sau khi bấm nút */
   opacity: 0;
-  transform: translateY(22px);
+  transform: translateY(24px);
   transition: opacity 0.9s ease, transform 0.9s ease;
 }
 .content__title-sub {
@@ -338,13 +345,13 @@ body.go-page2 #page2 { transform: translateX(0);     opacity: 1; z-index: 10; }
   max-width: 88vw;
 }
 
-/* Hiện chữ KNKT + sub khi bấm nút bất ngờ */
+/* JS thêm class .revealed vào #page2 khi bấm nút */
 #page2.revealed .content__title {
   opacity: 1;
   transform: translateY(0);
 }
 #page2.revealed .content__title:nth-child(2) {
-  transition-delay: 0.18s;
+  transition-delay: 0.2s;
 }
 
 /* Cursor — desktop only */
@@ -447,10 +454,9 @@ body.go-page2 #page2 { touch-action: none; overflow: hidden; }
 /* ── Bee Loading Bar ── */
 #surprise-hint {
   position: fixed;
-  /* Dưới dòng chữ sub — top: 50% + khoảng cách title + sub */
-  bottom: clamp(32px, 6vh, 60px);
+  top: 50%;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
   z-index: 100;
   pointer-events: none;
   opacity: 0;
@@ -458,8 +464,8 @@ body.go-page2 #page2 { touch-action: none; overflow: hidden; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  width: clamp(220px, 55vw, 420px);
+  gap: 14px;
+  width: clamp(260px, 60vw, 520px);
 }
 #surprise-hint.visible {
   opacity: 1;
@@ -468,7 +474,7 @@ body.go-page2 #page2 { touch-action: none; overflow: hidden; }
 /* Label text */
 #surprise-hint .bee-label {
   color: rgba(255, 255, 255, 0.55);
-  font-size: clamp(11px, 1.8vw, 13px);
+  font-size: clamp(12px, 1.8vw, 15px);
   letter-spacing: 1.5px;
   white-space: nowrap;
 }
@@ -477,11 +483,11 @@ body.go-page2 #page2 { touch-action: none; overflow: hidden; }
 #surprise-hint .bee-track {
   position: relative;
   width: 100%;
-  height: 14px;
+  height: 30px;
   background: rgba(255, 255, 255, 0.1);
   border-radius: 99px;
   overflow: visible;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 /* Fill (phần đã tải) */
@@ -493,7 +499,7 @@ body.go-page2 #page2 { touch-action: none; overflow: hidden; }
   border-radius: 99px;
   transition: width 0.25s ease;
   animation: bee-shimmer 1.8s linear infinite;
-  box-shadow: 0 0 8px rgba(241, 196, 15, 0.5);
+  box-shadow: 0 0 14px rgba(241, 196, 15, 0.6);
 }
 
 @keyframes bee-shimmer {
@@ -506,16 +512,16 @@ body.go-page2 #page2 { touch-action: none; overflow: hidden; }
   position: absolute;
   top: 50%;
   left: 0%;
-  transform: translate(-50%, -130%);
-  width: clamp(32px, 5vw, 44px);   /* ← chỉnh kích thước ong tại đây */
+  transform: translate(-50%, -112%);
+  width: clamp(48px, 7vw, 70px);   /* ← chỉnh kích thước ong tại đây */
   height: auto;
   transition: left 0.25s ease;
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+  filter: drop-shadow(0 3px 6px rgba(0,0,0,0.5));
   animation: bee-bounce 0.55s ease-in-out infinite alternate;
   pointer-events: none;
 }
 
 @keyframes bee-bounce {
-  from { transform: translate(-50%, -130%) rotate(-6deg); }
-  to   { transform: translate(-50%, -148%) rotate(6deg); }
+  from { transform: translate(-50%, -112%) rotate(-6deg); }
+  to   { transform: translate(-50%, -132%) rotate(6deg); }
 }
