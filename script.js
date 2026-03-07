@@ -267,7 +267,24 @@ CanvasTrail.prototype._tick = function () {
     ctx.globalAlpha = alpha;
     ctx.translate(p.x, p.y);
     ctx.rotate(p.rot);
-    ctx.drawImage(p.img, -w * 0.5, -h * 0.5, w, h);
+
+    // Bo góc tự nhiên — radius ~12% cạnh ngắn
+    var r = Math.min(w, h) * 0.12;
+    var x0 = -w * 0.5, y0 = -h * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(x0 + r, y0);
+    ctx.lineTo(x0 + w - r, y0);
+    ctx.quadraticCurveTo(x0 + w, y0,         x0 + w, y0 + r);
+    ctx.lineTo(x0 + w, y0 + h - r);
+    ctx.quadraticCurveTo(x0 + w, y0 + h,     x0 + w - r, y0 + h);
+    ctx.lineTo(x0 + r, y0 + h);
+    ctx.quadraticCurveTo(x0,     y0 + h,     x0, y0 + h - r);
+    ctx.lineTo(x0,     y0 + r);
+    ctx.quadraticCurveTo(x0,     y0,         x0 + r, y0);
+    ctx.closePath();
+    ctx.clip();
+
+    ctx.drawImage(p.img, x0, y0, w, h);
     ctx.restore();
   }
 };
@@ -381,35 +398,15 @@ function initTrail() {
   }
 
   // Load 150 ảnh — CHỈ hiện nút khi load xong hoàn toàn
-  var loadDone = false;
-  var waitMsgShown = false;
-
-  // Sau 10 giây, nếu chưa load xong thì hiện dòng chờ đợi
-  var waitTimer = setTimeout(function () {
-    if (!loadDone && hintEl) {
-      waitMsgShown = true;
-      hintEl.textContent = '⏳ Chờ đợi là hạnh phúc... đang tải ảnh';
-      hintEl.classList.add('visible');
-    }
-  }, 10000);
-
   prewarm(function onAllLoaded() {
-    loadDone = true;
-    clearTimeout(waitTimer);
     if (hintEl) {
-      if (waitMsgShown) {
-        // Đã hiện dòng chờ → chuyển sang "sẵn sàng" rồi ẩn
-        hintEl.textContent = '✨ Sẵn sàng rồi!';
-        setTimeout(function () { hintEl.classList.remove('visible'); }, 800);
-      } else {
-        // Load xong trước 10s → ẩn hint luôn, không hiện dòng chờ
-        hintEl.classList.remove('visible');
-      }
+      hintEl.textContent = '✨ Sẵn sàng rồi!';
+      setTimeout(function () { hintEl.classList.remove('visible'); }, 800);
     }
     if (btnSurprise) {
       setTimeout(function () {
         btnSurprise.classList.add('visible');
-      }, 600);
+      }, 600); // hiện sau khi hint vừa mờ đi
     }
   });
 }
