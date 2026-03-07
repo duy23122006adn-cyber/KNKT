@@ -381,15 +381,35 @@ function initTrail() {
   }
 
   // Load 150 ảnh — CHỈ hiện nút khi load xong hoàn toàn
+  var loadDone = false;
+  var waitMsgShown = false;
+
+  // Sau 10 giây, nếu chưa load xong thì hiện dòng chờ đợi
+  var waitTimer = setTimeout(function () {
+    if (!loadDone && hintEl) {
+      waitMsgShown = true;
+      hintEl.textContent = '⏳ Chờ đợi là hạnh phúc... đang tải ảnh';
+      hintEl.classList.add('visible');
+    }
+  }, 10000);
+
   prewarm(function onAllLoaded() {
+    loadDone = true;
+    clearTimeout(waitTimer);
     if (hintEl) {
-      hintEl.textContent = '✨ Sẵn sàng rồi!';
-      setTimeout(function () { hintEl.classList.remove('visible'); }, 800);
+      if (waitMsgShown) {
+        // Đã hiện dòng chờ → chuyển sang "sẵn sàng" rồi ẩn
+        hintEl.textContent = '✨ Sẵn sàng rồi!';
+        setTimeout(function () { hintEl.classList.remove('visible'); }, 800);
+      } else {
+        // Load xong trước 10s → ẩn hint luôn, không hiện dòng chờ
+        hintEl.classList.remove('visible');
+      }
     }
     if (btnSurprise) {
       setTimeout(function () {
         btnSurprise.classList.add('visible');
-      }, 600); // hiện sau khi hint vừa mờ đi
+      }, 600);
     }
   });
 }
