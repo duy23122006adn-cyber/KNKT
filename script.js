@@ -73,29 +73,45 @@ function isReady(idx) {
 }
 
 function prewarm(onAllLoaded) {
-  var total  = CFG.totalImages; // 150
-  var done   = 0;
+  var total = CFG.totalImages;
+  var done  = 0;
 
-  // Cập nhật hint text tiến độ
+  // Build bee loading bar HTML
   var hintEl = document.getElementById('surprise-hint');
-  function updateHint() {
-    if (hintEl) hintEl.textContent = 'Đang tải ảnh... ' + done + '/' + total;
+  if (hintEl) {
+    hintEl.innerHTML =
+      '<div class="bee-track">' +
+        '<div class="bee-fill" id="bee-fill"></div>' +
+        '<img class="bee-icon" id="bee-icon" src="./bee.png" alt="">' +
+      '</div>' +
+      '<span class="bee-label" id="bee-label">Đang tải... 0 / ' + total + '</span>';
   }
-  updateHint();
+
+  var fillEl  = document.getElementById('bee-fill');
+  var iconEl  = document.getElementById('bee-icon');
+  var labelEl = document.getElementById('bee-label');
+
+  function updateBar() {
+    var pct = Math.round((done / total) * 100);
+    if (fillEl)  fillEl.style.width = pct + '%';
+    if (iconEl)  iconEl.style.left  = pct + '%';
+    if (labelEl) labelEl.textContent = 'Đang tải... ' + done + ' / ' + total;
+  }
+  updateBar();
 
   for (var i = 0; i < total; i++) {
-    if (_cache[i] !== null) { done++; updateHint(); continue; }
+    if (_cache[i] !== null) { done++; updateBar(); continue; }
     _cache[i] = 'loading';
     (function(idx) {
       var im = new Image();
       im.onload = function () {
         _cache[idx] = im;
-        done++; updateHint();
+        done++; updateBar();
         if (done >= total && onAllLoaded) onAllLoaded();
       };
       im.onerror = function () {
         _cache[idx] = 'error';
-        done++; updateHint();
+        done++; updateBar();
         if (done >= total && onAllLoaded) onAllLoaded();
       };
       im.src = CFG.imgDir + 'img' + (idx + 1) + CFG.imgExt;
@@ -114,7 +130,7 @@ function lookAhead(fromIdx) {
    Không bao giờ tạo object mới sau khi init
 ═══════════════════════════════════════════ */
 function makeSlot() {
-  return { img: null, imgIdx: -1, x: 0, y: 0, rot: 0, age: 0, maxAge: 0, alive: false };
+  return { img: null, imgIdx: -1, x: 0, y: 0, rot: 0, age: 0, maxAge: 0, alive: false, imgW: 0, imgH: 0 };
 }
 
 function Pool(size) {
@@ -125,16 +141,18 @@ function Pool(size) {
 }
 
 /* Luôn spawn được — ghi đè slot cũ nhất khi pool đầy */
-Pool.prototype.spawn = function (imgIdx, img, x, y, rot, maxAge) {
+Pool.prototype.spawn = function (imgIdx, img, x, y, rot, maxAge, imgW, imgH) {
   var p = this.slots[this.head];
   this.head = (this.head + 1) % this.slots.length;
   if (!p.alive) this.count++;
   p.imgIdx = imgIdx;
-  p.img    = img;   // null nếu chưa load xong
+  p.img    = img;
   p.x      = x;    p.y   = y;
   p.rot    = rot;   p.age = 0;
   p.maxAge = maxAge;
   p.alive  = true;
+  p.imgW   = imgW || CFG.imgW;
+  p.imgH   = imgH || CFG.imgH;
 };
 
 Pool.prototype.anyAlive = function () { return this.count > 0; };
@@ -208,10 +226,24 @@ CanvasTrail.prototype._spawn = function (x, y) {
     lookAhead(idx);
     if (isReady(idx)) { img = _cache[idx]; break; }
   }
-  if (!img) return; // 20 ảnh tiếp theo chưa load → bỏ qua lần spawn này
+  if (!img) return;
+
+  // Giữ đúng tỉ lệ ảnh thật, giới hạn cạnh dài nhất
+  var maxLong = IS_MOBILE ? 130 : 240;
+  var nw = img.naturalWidth  || CFG.imgW;
+  var nh = img.naturalHeight || CFG.imgH;
+  var ratio = nw / nh;
+  var imgW, imgH;
+  if (nw >= nh) {
+    imgW = maxLong;
+    imgH = Math.round(maxLong / ratio);
+  } else {
+    imgH = maxLong;
+    imgW = Math.round(maxLong * ratio);
+  }
 
   var rot = (Math.random() - 0.5) * 24 * Math.PI / 180;
-  this.pool.spawn(idx, img, x, y, rot, CFG.totalFrames);
+  this.pool.spawn(idx, img, x, y, rot, CFG.totalFrames, imgW, imgH);
 };
 
 CanvasTrail.prototype._tick = function () {
@@ -260,8 +292,8 @@ CanvasTrail.prototype._tick = function () {
     else if (t < 0.60) { sc = 1.0; }
     else               { sc = 1.0 - (t - 0.60) / 0.40 * 0.15; }
 
-    var w = CFG.imgW * sc;
-    var h = CFG.imgH * sc;
+    var w = p.imgW * sc;
+    var h = p.imgH * sc;
 
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -326,10 +358,9 @@ function initTrail() {
   var trail;
   var eventsEnabled = false;
 
-  // Hiện hint "đang tải..." ngay khi vào trang 2
+  // Hiện bee loading bar ngay khi vào trang 2
   if (hintEl) {
     hintEl.classList.add('visible');
-    hintEl.textContent = 'Đang tải ảnh... 0/150';
   }
 
   // Throttle helper
@@ -386,6 +417,7 @@ function initTrail() {
       hintEl.classList.remove('visible');
       setTimeout(function () { hintEl.style.display = 'none'; }, 500);
     }
+    page2.classList.add('revealed'); // hiện chữ KNKT + sub
     enableEvents();
     if (trail) trail.wakeUp();
   }
@@ -399,14 +431,17 @@ function initTrail() {
 
   // Load 150 ảnh — CHỈ hiện nút khi load xong hoàn toàn
   prewarm(function onAllLoaded() {
+    var fillEl  = document.getElementById('bee-fill');
+    var iconEl  = document.getElementById('bee-icon');
+    var labelEl = document.getElementById('bee-label');
+    if (fillEl)  fillEl.style.width = '100%';
+    if (iconEl)  iconEl.style.left  = '100%';
+    if (labelEl) labelEl.textContent = '✨ Sẵn sàng rồi!';
     if (hintEl) {
-      hintEl.textContent = '✨ Sẵn sàng rồi!';
-      setTimeout(function () { hintEl.classList.remove('visible'); }, 800);
+      setTimeout(function () { hintEl.classList.remove('visible'); }, 900);
     }
     if (btnSurprise) {
-      setTimeout(function () {
-        btnSurprise.classList.add('visible');
-      }, 600); // hiện sau khi hint vừa mờ đi
+      setTimeout(function () { btnSurprise.classList.add('visible'); }, 700);
     }
   });
 }

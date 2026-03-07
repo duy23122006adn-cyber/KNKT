@@ -323,6 +323,9 @@ body.go-page2 #page2 { transform: translateX(0);     opacity: 1; z-index: 10; }
   line-height: 1.2;
   color: #d05400;
   text-align: center;
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.9s ease, transform 0.9s ease;
 }
 .content__title-sub {
   color: var(--color-content-title-sub);
@@ -333,6 +336,15 @@ body.go-page2 #page2 { transform: translateX(0);     opacity: 1; z-index: 10; }
   text-align: center;
   padding: 0 24px;
   max-width: 88vw;
+}
+
+/* Hiện chữ KNKT + sub khi bấm nút bất ngờ */
+#page2.revealed .content__title {
+  opacity: 1;
+  transform: translateY(0);
+}
+#page2.revealed .content__title:nth-child(2) {
+  transition-delay: 0.18s;
 }
 
 /* Cursor — desktop only */
@@ -432,21 +444,78 @@ body.go-page2 #page2 { touch-action: none; overflow: hidden; }
   transform: translate(-50%, -50%) scale(0.85);
 }
 
-/* ── Hint text dưới nút bất ngờ ── */
+/* ── Bee Loading Bar ── */
 #surprise-hint {
   position: fixed;
-  top: calc(50% + 70px);
+  /* Dưới dòng chữ sub — top: 50% + khoảng cách title + sub */
+  bottom: clamp(32px, 6vh, 60px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 100;
-  color: rgba(255, 255, 255, 0.45);
-  font-size: clamp(11px, 2vw, 14px);
-  letter-spacing: 1px;
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.5s ease;
-  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: clamp(220px, 55vw, 420px);
 }
 #surprise-hint.visible {
   opacity: 1;
+}
+
+/* Label text */
+#surprise-hint .bee-label {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: clamp(11px, 1.8vw, 13px);
+  letter-spacing: 1.5px;
+  white-space: nowrap;
+}
+
+/* Track (nền thanh) */
+#surprise-hint .bee-track {
+  position: relative;
+  width: 100%;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 99px;
+  overflow: visible;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* Fill (phần đã tải) */
+#surprise-hint .bee-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #f39c12, #f1c40f, #f39c12);
+  background-size: 200% 100%;
+  border-radius: 99px;
+  transition: width 0.25s ease;
+  animation: bee-shimmer 1.8s linear infinite;
+  box-shadow: 0 0 8px rgba(241, 196, 15, 0.5);
+}
+
+@keyframes bee-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Con ong chạy trên đầu thanh */
+#surprise-hint .bee-icon {
+  position: absolute;
+  top: 50%;
+  left: 0%;
+  transform: translate(-50%, -130%);
+  width: clamp(32px, 5vw, 44px);   /* ← chỉnh kích thước ong tại đây */
+  height: auto;
+  transition: left 0.25s ease;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+  animation: bee-bounce 0.55s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes bee-bounce {
+  from { transform: translate(-50%, -130%) rotate(-6deg); }
+  to   { transform: translate(-50%, -148%) rotate(6deg); }
 }
